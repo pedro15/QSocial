@@ -138,5 +138,10 @@ namespace QSocial.Auth
                 if (OnSuccess != null) Enquene(OnSuccess);
             });
         }
+
+        public void SignOut()
+        {
+            if (IsLoggedIn()) auth.SignOut();
+        }
     }
 }
