@@ -60,6 +60,8 @@ namespace QSocial.Auth
         [Header("Auth Methods")]
         [SerializeField]
         private EmailAuth emailAuth = default;
+        [SerializeField]
+        private AnonymousAuth anonymousAuth = default;
 
         private Dictionary<string, AuthMethod> Methodsdb = new Dictionary<string, AuthMethod>();
 
@@ -85,6 +87,7 @@ namespace QSocial.Auth
            });
 
             emailAuth.Initialize(this);
+            anonymousAuth.Initialize(this);
         }
 
         public void RequestLogin()
@@ -150,7 +153,10 @@ namespace QSocial.Auth
                     currentMethod.OnReset();
                     currentMethod = null;
 
-                    UpdateUI(AuthUI.MethodSelection);
+                    if (tres == AuthResult.None)
+                        UpdateUI(AuthUI.MethodSelection);
+                    else if (tres == AuthResult.Success)
+                        UpdateUI(AuthUI.None);
 
                     break;
                 }
