@@ -14,7 +14,7 @@ namespace QSocial.Auth
             _result = AuthResult.None;
         }
 
-        public override void Execute()
+        public override void OnSelect()
         {
             _result = AuthResult.Running;
             Debug.Log("Auth Anonymous!");
@@ -22,9 +22,9 @@ namespace QSocial.Auth
             {
                 Debug.Log("Auth Anonymous completed!");
                 _result = AuthResult.Success;
-            }, () =>
+            }, (string msg) =>
             {
-                Debug.LogError("Auth Anonymous Failure!");
+                Debug.LogError($"Auth Anonymous Failure! {msg}");
                 _result = AuthResult.Failure;
             });
         }

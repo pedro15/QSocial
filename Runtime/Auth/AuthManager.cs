@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UniToolkit.Utility;
-using Action = System.Action;
+using System;
 
 namespace QSocial.Auth
 {
@@ -69,46 +69,49 @@ namespace QSocial.Auth
             }
         }
 
-        public void LoginWithEmail(string email, string password, Action OnSuccess = null, Action OnFailure = null)
+        public void LoginWithEmail(string email, string password, Action OnSuccess = null, Action<string> OnFailure = null)
         {
             auth.SignInWithEmailAndPasswordAsync(email, password).ContinueWith(task =>
           {
               if (task.IsCanceled || task.IsFaulted)
               {
-                  if (OnFailure != null) Enquene(OnFailure);
+                  if (OnFailure != null) Enquene( () => OnFailure.Invoke((task.Exception != null) ?  
+                      task.Exception.Message : "Canceled"));
                   return;
               }
               if (OnSuccess != null) Enquene(OnSuccess);
           });
         }
 
-        public void LoginAnonymous(Action OnSuccess = null, Action OnFailure = null)
+        public void LoginAnonymous(Action OnSuccess = null, Action<string> OnFailure = null)
         {
             auth.SignInAnonymouslyAsync().ContinueWith(task =>
             {
                 if (task.IsCanceled || task.IsFaulted)
                 {
-                    if (OnFailure != null) Enquene(OnFailure);
+                    if (OnFailure != null) Enquene(() => OnFailure.Invoke((task.Exception != null) ?
+                     task.Exception.Message : "Canceled"));
                     return;
                 }
                 if (OnSuccess != null) Enquene(OnSuccess);
             });
         }
 
-        public void CreateUserWithEmail(string email, string password, Action OnSuccess = null, Action OnFailure = null)
+        public void CreateUserWithEmail(string email, string password, Action OnSuccess = null, Action<string> OnFailure = null)
         {
             auth.CreateUserWithEmailAndPasswordAsync(email, password).ContinueWith(task =>
            {
                if (task.IsCanceled || task.IsFaulted)
                {
-                   if (OnFailure != null) Enquene(OnFailure);
+                   if (OnFailure != null) Enquene(() => OnFailure.Invoke((task.Exception != null) ?
+                     task.Exception.Message : "Canceled"));
                    return;
                }
                if (OnSuccess != null) Enquene(OnSuccess);
            });
         }
 
-        public void CreateUserFromAnonymousCredential(Credential credential, Action OnSuccess = null, Action OnFailure = null)
+        public void CreateUserFromAnonymousCredential(Credential credential, Action OnSuccess = null, Action<string> OnFailure = null)
         {
             if (CurrentUser.IsAnonymous)
             {
@@ -116,7 +119,8 @@ namespace QSocial.Auth
                {
                    if (task.IsCanceled || task.IsFaulted)
                    {
-                       if (OnFailure != null) Enquene(OnFailure);
+                       if (OnFailure != null) Enquene(() => OnFailure.Invoke((task.Exception != null) ?
+                     task.Exception.Message : "Canceled"));
                        return;
                    }
 
@@ -125,13 +129,14 @@ namespace QSocial.Auth
             }
         }
 
-        public void UpdateUserName( string newUsername , Action OnSuccess  = null , Action OnFailure = null )
+        public void UpdateUserName( string newUsername , Action OnSuccess  = null , Action<string> OnFailure = null )
         {
             auth.CurrentUser.UpdateUserProfileAsync(new UserProfile() { DisplayName = newUsername }).ContinueWith(task =>
             {
                 if(task.IsCanceled || task.IsFaulted)
                 {
-                    if (OnFailure != null) Enquene(OnFailure);
+                    if (OnFailure != null) Enquene(() => OnFailure.Invoke((task.Exception != null) ?
+                     task.Exception.Message : "Canceled"));
                     return;
                 }
 

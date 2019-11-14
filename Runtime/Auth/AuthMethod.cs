@@ -1,6 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 
 namespace QSocial.Auth
@@ -11,6 +9,8 @@ namespace QSocial.Auth
         [SerializeField]
         private bool Enabled = true;
 
+        public bool IsEnabled { get { return Enabled; } }
+
         [SerializeField]
         private Button button = default;
 
@@ -19,6 +19,21 @@ namespace QSocial.Auth
         public abstract AuthResult GetResult();
 
         public abstract string Id { get; }
+
+        public static bool IsAnonymousConversion
+        {
+            get
+            {
+                return AuthManager.Instance.IsLoggedIn() && AuthManager.Instance.CurrentUser.IsAnonymous;
+            }
+        }
+
+        public void SetActive(bool active)
+        {
+            bool state = IsEnabled && active;
+            if (button.gameObject.activeInHierarchy != state)
+                button.gameObject.SetActive(state);
+        }
 
         public void Initialize(AuthController controller)
         {
@@ -42,6 +57,6 @@ namespace QSocial.Auth
 
         public virtual void OnReset() { }
 
-        public abstract void Execute();
+        public abstract void OnSelect();
     }
 }

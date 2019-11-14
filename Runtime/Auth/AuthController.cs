@@ -1,8 +1,8 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
 
 namespace QSocial.Auth
 {
@@ -70,7 +70,7 @@ namespace QSocial.Auth
         private void Start()
         {
             RegisterSingleton();
-            
+
             Button_UpgradeUsername.onClick.AddListener(() =>
            {
                AuthManager.Instance.UpdateUserName(Input_Username.text,
@@ -79,7 +79,7 @@ namespace QSocial.Auth
                        // Success
                        Debug.Log("Username Updated!");
                        RequestLogin();
-                   }, () =>
+                   }, (string msg) =>
                    {
                        // Failure
                        Debug.LogError("Username Failed to update!");
@@ -90,27 +90,35 @@ namespace QSocial.Auth
             anonymousAuth.Initialize(this);
         }
 
-        public void RequestLogin()
+        public void RequestLogin(bool AnonymousConversion = false)
         {
-            if(AuthManager.Instance.IsLoggedIn())
+            if (AuthManager.Instance.IsLoggedIn())
             {
                 string username = AuthManager.Instance.CurrentUser.DisplayName;
-                if(string.IsNullOrEmpty(username))
+                if (string.IsNullOrEmpty(username))
                 {
                     UpdateUI(AuthUI.UpgradeUserName);
-                }else
-                {
-                    UpdateUI(AuthUI.None);
                 }
-            }else
+                else
+                {
+                    if (AnonymousConversion && AuthMethod.IsAnonymousConversion)
+                    {
+                        UpdateUI(AuthUI.MethodSelection);
+                    }else
+                    {
+                        UpdateUI(AuthUI.None);
+                    }
+                }
+            }
+            else
             {
                 UpdateUI(AuthUI.MethodSelection);
             }
         }
 
-        public void RegisterMethod(AuthMethod method , string MethodId)
+        public void RegisterMethod(AuthMethod method, string MethodId)
         {
-            if(!Methodsdb.ContainsKey(MethodId))
+            if (!Methodsdb.ContainsKey(MethodId))
             {
                 Methodsdb.Add(MethodId, method);
             }
@@ -118,12 +126,12 @@ namespace QSocial.Auth
 
         public void ExecuteAuthMethod(string MethodId)
         {
-            if (Methodsdb.TryGetValue(MethodId , out currentMethod))
+            if (Methodsdb.TryGetValue(MethodId, out currentMethod))
             {
                 IAuthCustomUI customUI = currentMethod as IAuthCustomUI;
                 if (customUI != null) UpdateUI(AuthUI.CustomUI);
 
-                currentMethod.Execute();
+                currentMethod.OnSelect();
 
                 StartCoroutine(IExecuteMethod());
             }
@@ -133,19 +141,25 @@ namespace QSocial.Auth
         {
             Container_Social.SetActive(ui != AuthUI.None);
             Container_MethodSelection.SetActive(ui == AuthUI.MethodSelection);
+
+            if (Container_MethodSelection.activeInHierarchy)
+            {
+                bool GuestRequest = AuthManager.Instance.IsLoggedIn() && AuthManager.Instance.CurrentUser.IsAnonymous;
+
+                anonymousAuth.SetActive(!GuestRequest);
+            }
+
             Container_UpgradeUsername.SetActive(ui == AuthUI.UpgradeUserName);
         }
 
         private IEnumerator IExecuteMethod()
         {
-            while(currentMethod != null)
+            while (currentMethod != null)
             {
                 AuthResult tres = currentMethod.GetResult();
 
-                Debug.Log($"Current result: { tres } Input Recived: { Input.GetKey(KeyCode.Escape) }");
-
-                if(tres == AuthResult.Success || tres == AuthResult.Failure || 
-                    (tres == AuthResult.None && Input.GetKey(KeyCode.Escape)) )
+                if (tres == AuthResult.Success || tres == AuthResult.Failure ||
+                    (tres == AuthResult.None && Input.GetKey(KeyCode.Escape)))
                 {
                     IAuthCustomUI customUI = currentMethod as IAuthCustomUI;
                     customUI?.HideUI();
@@ -156,7 +170,7 @@ namespace QSocial.Auth
                     if (tres == AuthResult.None)
                         UpdateUI(AuthUI.MethodSelection);
                     else if (tres == AuthResult.Success)
-                        UpdateUI(AuthUI.None);
+                        RequestLogin();
 
                     break;
                 }

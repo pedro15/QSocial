@@ -46,7 +46,7 @@ namespace QSocial.Auth
             LoginFormContainer.SetActive(false);
         }
 
-        public override void Execute()
+        public override void OnSelect()
         {
             LoginFormContainer.SetActive(true);
         }
@@ -60,7 +60,7 @@ namespace QSocial.Auth
                 {
                     _result = AuthResult.Success;
                     Debug.Log("Login with email Success!");
-                }, () =>
+                }, (string msg) =>
                  {
                      Debug.LogError("Login with email Failure!");
                      _result = AuthResult.Failure;
@@ -76,7 +76,7 @@ namespace QSocial.Auth
                 {
                     _result = AuthResult.Success;
                     Debug.Log("Register with email Success!");
-                }, () =>
+                }, (string msg) =>
                 {
                     Debug.LogError("Register with email Failure!");
                     _result = AuthResult.Failure;
