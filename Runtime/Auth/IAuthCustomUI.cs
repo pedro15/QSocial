@@ -3,5 +3,7 @@
     public interface IAuthCustomUI
     {
         void HideUI();
+
+        bool GoBack();
     }
 }

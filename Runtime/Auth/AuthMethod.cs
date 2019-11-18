@@ -16,11 +16,9 @@ namespace QSocial.Auth
 
         protected AuthController controller { get; private set; }
 
-        public abstract AuthResult GetResult();
-
         public abstract string Id { get; }
 
-        public static bool IsAnonymousConversion
+        public static bool IsAnonymousUser
         {
             get
             {
@@ -57,6 +55,13 @@ namespace QSocial.Auth
 
         public virtual void OnReset() { }
 
-        public abstract void OnSelect();
+        public virtual void OnSelect() { }
+
+        public virtual bool GoBackInput() 
+        {
+            return Input.GetKey(KeyCode.Escape);
+        }
+
+        public abstract AuthResult OnExecute();
     }
 }

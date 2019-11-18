@@ -46,6 +46,8 @@ namespace QSocial.Auth
 
         [Header("General Settings")]
         [SerializeField]
+        private Button Button_Close = default;
+        [SerializeField]
         private GameObject Container_Social = default;
         [SerializeField]
         private GameObject Container_MethodSelection = default;
@@ -73,18 +75,20 @@ namespace QSocial.Auth
 
             Button_UpgradeUsername.onClick.AddListener(() =>
            {
-               AuthManager.Instance.UpdateUserName(Input_Username.text,
+               AuthManager.Instance.UpdateProfile(Input_Username.text, string.Empty, 
                    () =>
                    {
                        // Success
-                       Debug.Log("Username Updated!");
+                       Debug.Log("Profile Updated!");
                        RequestLogin();
                    }, (string msg) =>
                    {
                        // Failure
-                       Debug.LogError("Username Failed to update!");
+                       Debug.LogError("Profile Failed to update!");
                    });
            });
+
+            Button_Close.onClick.AddListener(() => UpdateUI(AuthUI.None));
 
             emailAuth.Initialize(this);
             anonymousAuth.Initialize(this);
@@ -97,12 +101,14 @@ namespace QSocial.Auth
                 string username = AuthManager.Instance.CurrentUser.DisplayName;
                 if (string.IsNullOrEmpty(username))
                 {
+                    Button_Close.gameObject.SetActive(false);
                     UpdateUI(AuthUI.UpgradeUserName);
                 }
                 else
                 {
-                    if (AnonymousConversion && AuthMethod.IsAnonymousConversion)
+                    if (AnonymousConversion && AuthMethod.IsAnonymousUser)
                     {
+                        Button_Close.gameObject.SetActive(true);
                         UpdateUI(AuthUI.MethodSelection);
                     }else
                     {
@@ -112,6 +118,7 @@ namespace QSocial.Auth
             }
             else
             {
+                Button_Close.gameObject.SetActive(false);
                 UpdateUI(AuthUI.MethodSelection);
             }
         }
@@ -154,15 +161,29 @@ namespace QSocial.Auth
 
         private IEnumerator IExecuteMethod()
         {
+            float m_time = 0;
             while (currentMethod != null)
             {
-                AuthResult tres = currentMethod.GetResult();
+                AuthResult tres = currentMethod.OnExecute();
 
-                if (tres == AuthResult.Success || tres == AuthResult.Failure ||
-                    (tres == AuthResult.None && Input.GetKey(KeyCode.Escape)))
+                bool GotInput = currentMethod.GoBackInput();
+
+                bool InputValid = false;
+
+                if (GotInput && (Time.time - m_time) > 0.35f)
                 {
                     IAuthCustomUI customUI = currentMethod as IAuthCustomUI;
-                    customUI?.HideUI();
+                    InputValid = (customUI != null) && customUI.GoBack();
+                    m_time = Time.time;
+                }
+
+                if (tres == AuthResult.Success || tres == AuthResult.Failure || (tres == AuthResult.None && InputValid))
+                {
+                    if (tres == AuthResult.Success)
+                    {
+                       IAuthCustomUI customUI = currentMethod as IAuthCustomUI;
+                       customUI?.HideUI();
+                    }
 
                     currentMethod.OnReset();
                     currentMethod = null;

@@ -7,31 +7,32 @@ namespace QSocial.Auth
     {
         public override string Id => "Auth-Anonymous";
 
-        private AuthResult _result = AuthResult.None;
+        private AuthResult Result = AuthResult.None;
 
         public override void OnReset()
         {
-            _result = AuthResult.None;
+            Result = AuthResult.None;
+        }
+
+        public override AuthResult OnExecute()
+        {
+            return Result;
         }
 
         public override void OnSelect()
         {
-            _result = AuthResult.Running;
+            Result = AuthResult.Running;
             Debug.Log("Auth Anonymous!");
-            AuthManager.Instance.LoginAnonymous(() =>
+            AuthManager.Instance.SingInAnonymous(() =>
             {
                 Debug.Log("Auth Anonymous completed!");
-                _result = AuthResult.Success;
+                Result = AuthResult.Success;
             }, (string msg) =>
             {
                 Debug.LogError($"Auth Anonymous Failure! {msg}");
-                _result = AuthResult.Failure;
+                Result = AuthResult.Failure;
             });
         }
 
-        public override AuthResult GetResult()
-        {
-            return _result;
-        }
     }
 }
