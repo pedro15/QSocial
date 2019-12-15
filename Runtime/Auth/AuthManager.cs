@@ -1,216 +1,123 @@
-﻿using Firebase.Auth;
+﻿using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
-using UniToolkit.Utility;
-using System;
+using UnityEngine.UI;
 
 namespace QSocial.Auth
 {
-    [AddComponentMenu("QSocial/Auth Manager"),DefaultExecutionOrder(-50)]
-    public class AuthManager : MonoSingleton<AuthManager>
+    public class AuthManager : MonoBehaviour
     {
-        public delegate void e_OnStateChanged();
+        private static AuthManager _instance = null;
 
-        public static event e_OnStateChanged OnStateChanged;
-
-        public delegate void e_BaseEvent(AuthResult result, string message);
-
-        public static event e_BaseEvent OnEmailSingIn;
-
-        public static event e_BaseEvent OnAnonymousSingIn;
-
-        public static event e_BaseEvent OnCreateUserEmail;
-
-        public static event e_BaseEvent OnUpdateProfile;
-
-        public static event e_BaseEvent OnLinkAccount;
-
-        private readonly Queue<Action> _ExecutionQuene = new Queue<Action>();
-        private bool _QueneEmpty = true;
-
-        protected override bool Persistent => true;
-        public FirebaseUser CurrentUser => auth.CurrentUser;
-
-        public bool IsLoggedIn()
+        public static AuthManager Instance
         {
-            return CurrentUser != null;
+            get
+            {
+                if (!_instance) _instance = FindObjectOfType<AuthManager>();
+
+                return _instance;
+            }
         }
 
-        private FirebaseAuth auth;
+        private AuthController controller;
+
+        private Dictionary<string, AuthMethod> methodsdb;
+
+        private AuthModule[] Modules;
+
+        private bool ModulesRunning = false;
+        private bool AuthRunning = false;
 
         private void Start()
         {
-            auth = FirebaseAuth.DefaultInstance;
-            auth.StateChanged += Auth_StateChanged;   
-        }
-
-        private void OnDestroy()
-        {
-            auth.StateChanged -= Auth_StateChanged;
-        }
-
-        private void Auth_StateChanged(object sender, EventArgs e)
-        {
-            OnStateChanged?.Invoke();
-        }
-
-        private void Update()
-        {
-            if (_QueneEmpty) return;
-
-            List<Action> actions = new List<Action>();
-
-            lock (_ExecutionQuene)
+            if (Instance != null && Instance != this)
             {
-                for (int i = 0; i < _ExecutionQuene.Count; i++)
-                {
-                    actions.Add(_ExecutionQuene.Dequeue());
-                }
-                _QueneEmpty = true;
+                Destroy(this);
+                return;
             }
-
-            foreach (Action action in actions) action.Invoke();
+            controller = AuthController.Instance;
+            methodsdb = new Dictionary<string, AuthMethod>();
         }
 
-        private void Enquene(Action action)
+        public void RequestLogin(bool Guestvalid = false)
         {
-            lock (_ExecutionQuene)
+            if (!ModulesRunning)
+                StartCoroutine(I_CheckLogin(Guestvalid));
+        }
+
+        private IEnumerator I_CheckLogin(bool GuestRequest = false)
+        {
+            ModulesRunning = true;
+            for (int i = 0; i < Modules.Length; i++)
             {
-                _ExecutionQuene.Enqueue(action);
-                _QueneEmpty = false;
-            }
-        }
+                AuthModule module = Modules[i];
 
-        public void SingInWithEmail(string email, string password, Action OnSuccess = null, Action<string> OnFailure = null)
-        {
-            auth.SignInWithEmailAndPasswordAsync(email, password).ContinueWith(task =>
-          {
-              if (task.IsCanceled || task.IsFaulted)
-              {
-                  string msg = (task.Exception != null) ? task.Exception.Message : "Canceled";
-
-                  if (OnFailure != null) Enquene( () => OnFailure.Invoke(msg));
-
-                  if (OnEmailSingIn != null) Enquene(() => OnEmailSingIn.Invoke(AuthResult.Failure , msg));
-
-                  return;
-              }
-              if (OnSuccess != null) Enquene(OnSuccess);
-
-              if (OnEmailSingIn != null) Enquene(() => OnEmailSingIn.Invoke(AuthResult.Success, string.Empty));
-          });
-        }
-
-        public void SingInAnonymous(Action OnSuccess = null, Action<string> OnFailure = null)
-        {
-            auth.SignInAnonymouslyAsync().ContinueWith(task =>
-            {
-                if (task.IsCanceled || task.IsFaulted)
+                if (module.IsValid(GuestRequest, controller.CurrentUser))
                 {
-                    string msg = (task.Exception != null) ? task.Exception.Message : "Canceled";
-
-                    if (OnFailure != null) Enquene(() => OnFailure.Invoke(msg));
-
-                    if (OnAnonymousSingIn != null) Enquene(() => OnAnonymousSingIn.Invoke(AuthResult.Failure,
-                        msg));
-
-                    return;
+                    module.Execute(this);
+                    yield return new WaitUntil(() => module.IsCompleted());
+                    module.OnFinish(this);
                 }
-                if (OnSuccess != null) Enquene(OnSuccess);
-                if (OnAnonymousSingIn != null) OnAnonymousSingIn.Invoke(AuthResult.Success, string.Empty);
-            });
+            }
+            ModulesRunning = false;
+            yield return 0;
         }
 
-        public void CreateUserWithEmail(string email, string password, Action OnSuccess = null, Action<string> OnFailure = null)
+        public void RegisterAuthMethod(AuthMethod method)
         {
-            auth.CreateUserWithEmailAndPasswordAsync(email, password).ContinueWith(task =>
-           {
-               if (task.IsCanceled || task.IsFaulted)
-               {
-                   string msg = (task.Exception != null) ? task.Exception.Message : "Canceled";
-
-                   if (OnFailure != null) Enquene(() => OnFailure.Invoke(msg));
-
-                   if (OnCreateUserEmail != null) Enquene(() => OnCreateUserEmail.Invoke(AuthResult.Failure, msg));
-
-                   return;
-               }
-
-               Enquene(() =>
-              {
-                  if (OnSuccess != null) OnSuccess.Invoke();
-
-                  if (OnCreateUserEmail != null) OnCreateUserEmail.Invoke(AuthResult.Success, string.Empty);
-              });
-           });
-        }
-
-        public void LinkAccount(Credential credential, Action OnSuccess = null, Action<string> OnFailure = null)
-        {
-            if (CurrentUser.IsAnonymous)
+            if (!methodsdb.ContainsKey(method.Id))
             {
-                auth.CurrentUser.LinkWithCredentialAsync(credential).ContinueWith(task =>
-               {
-                   if (task.IsCanceled || task.IsFaulted)
-                   {
-                       string msg = (task.Exception != null) ? task.Exception.Message : "Canceled";
-
-                       Enquene(() =>
-                       {
-                           if (OnFailure != null) OnFailure.Invoke(msg);
-
-                           if (OnLinkAccount != null) OnLinkAccount.Invoke(AuthResult.Failure, msg);
-                       });
-
-                       return;
-                   }
-
-                   Enquene(() =>
-                   {
-                       if (OnSuccess != null) OnSuccess.Invoke();
-
-                       if (OnLinkAccount != null) OnLinkAccount.Invoke(AuthResult.Success, string.Empty);
-                   });
-
-               });
+                methodsdb.Add(method.Id , method);
             }
         }
 
-        public void UpdateProfile( string newUsername, string AvatarUrl , Action OnSuccess  = null , Action<string> OnFailure = null )
+        public void ExecuteAuthMethod(string methodid)
         {
-            bool urlValid = !string.IsNullOrEmpty(AvatarUrl) && Uri.IsWellFormedUriString(AvatarUrl, UriKind.Absolute);
+            if (!AuthRunning)
+                StartCoroutine(I_ExecuteMethod(methodid));
+        }
 
-            UserProfile profile = urlValid ? new UserProfile()
-            {
-                DisplayName = newUsername,
-                PhotoUrl = new Uri(AvatarUrl)
-            } : new UserProfile()
-            {
-                DisplayName = newUsername
-            };
+        private IEnumerator I_ExecuteMethod(string methodid)
+        {
+            AuthMethod method = null;
 
-            auth.CurrentUser.UpdateUserProfileAsync(profile).ContinueWith(task =>
+            if (methodsdb.TryGetValue(methodid , out method))
             {
-                if(task.IsCanceled || task.IsFaulted)
+                IAuthCustomUI customUI = method as IAuthCustomUI;
+                customUI?.DisplayUI();
+
+                IAuthCustomNavigation customNavigation = method as IAuthCustomNavigation;
+
+                while(true)
                 {
-                    string msg = (task.Exception != null) ? task.Exception.Message : "Canceled";
+                    bool goback = (customNavigation != null) ? customNavigation.GoBack() : Input.GetKey(KeyCode.Escape);
 
-                    if (OnFailure != null) Enquene(() => OnFailure.Invoke(msg));
+                    AuthResult tres = method.GetResult();
 
-                    if (OnUpdateProfile != null) Enquene(() => OnUpdateProfile.Invoke(AuthResult.Failure, msg));
-                    
-                    return;
+                    if (tres == AuthResult.Completed || (tres == AuthResult.None && goback) )
+                    {
+                        if (tres == AuthResult.Completed)
+                        {
+                            method.OnFinish();
+                        }
+
+                        customUI?.HideUI();
+
+                        RequestLogin();
+
+                        break;
+                    }
+
+                    yield return new WaitForEndOfFrame();
                 }
+            }else
+            {
+                Debug.LogError("[AuthManager] Method not found: " + methodid);
+            }
 
-                if (OnSuccess != null) Enquene(OnSuccess);
-
-                if (OnUpdateProfile != null) Enquene(() => OnUpdateProfile.Invoke(AuthResult.Success, string.Empty));
-            });
+            yield return 0;
         }
 
-        public void SignOut()
-        {
-            if (IsLoggedIn()) auth.SignOut();
-        }
     }
 }

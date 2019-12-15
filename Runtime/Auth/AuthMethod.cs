@@ -7,61 +7,26 @@ namespace QSocial.Auth
     public abstract class AuthMethod
     {
         [SerializeField]
-        private bool Enabled = true;
-
-        public bool IsEnabled { get { return Enabled; } }
-
-        [SerializeField]
-        private Button button = default;
-
-        protected AuthController controller { get; private set; }
+        private Button SelectionButton = default;
 
         public abstract string Id { get; }
 
-        public static bool IsAnonymousUser
+        private bool Initialized = false;
+
+        public void Init(AuthManager manager)
         {
-            get
+            if (!Initialized)
             {
-                return AuthManager.Instance.IsLoggedIn() && AuthManager.Instance.CurrentUser.IsAnonymous;
+                SelectionButton.onClick.AddListener(() => manager.ExecuteAuthMethod(Id));
+
+                manager.RegisterAuthMethod(this);
+                Initialized = true;
             }
         }
-
-        public void SetActive(bool active)
-        {
-            bool state = IsEnabled && active;
-            if (button.gameObject.activeInHierarchy != state)
-                button.gameObject.SetActive(state);
-        }
-
-        public void Initialize(AuthController controller)
-        {
-            this.controller = controller;
-            if (Enabled)
-            {
-                controller.RegisterMethod(this, Id);
-                button.onClick.AddListener(() => controller.ExecuteAuthMethod(Id));
-                if (!button.gameObject.activeInHierarchy)
-                    button.gameObject.SetActive(true);
-                OnInit();
-            }
-            else if (button.gameObject.activeInHierarchy)
-            {
-                button.gameObject.SetActive(false);
-            }
-
-        }
+        public abstract AuthResult GetResult();
 
         protected virtual void OnInit() { }
 
-        public virtual void OnReset() { }
-
-        public virtual void OnSelect() { }
-
-        public virtual bool GoBackInput() 
-        {
-            return Input.GetKey(KeyCode.Escape);
-        }
-
-        public abstract AuthResult OnExecute();
+        public virtual void OnFinish() { }
     }
 }

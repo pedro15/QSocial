@@ -1,204 +1,209 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using TMPro;
+﻿using Firebase.Auth;
+using QSocial.Utility;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace QSocial.Auth
 {
     public class AuthController : MonoBehaviour
     {
-        #region Singleton 
-
-        private static AuthController m_authController = null;
+        private static AuthController _instance = null;
 
         public static AuthController Instance
         {
             get
             {
-                if (!m_authController) m_authController = FindObjectOfType<AuthController>();
+                if (!_instance) _instance = FindObjectOfType<AuthController>();
 
-                return m_authController;
+                return _instance;
             }
         }
 
-        private void RegisterSingleton()
-        {
-            if (m_authController != null && m_authController != this)
-            {
-                Destroy(this);
-                return;
-            }
+        public delegate void _onStateChanged();
 
-            DontDestroyOnLoad(gameObject);
-            m_authController = this;
+        public static event _onStateChanged OnStateChanged;
+
+        public delegate void _onAuthComplete();
+
+        public static event _onAuthComplete OnAuthComplete;
+
+        public delegate void _onAuthFail(System.Exception ex);
+
+        public static event _onAuthFail OnAuthFail;
+
+        public delegate void _onLinkAccount();
+
+        public static event _onLinkAccount OnLinkAccount;
+
+        public delegate void _onLinkAccountFail(System.Exception ex);
+
+        public static event _onLinkAccountFail OnLinkAccountFail;
+
+        public delegate void _onUserProfileUpdated();
+        public static event _onUserProfileUpdated OnUserProfileUpdated;
+
+        public delegate void _onUserProfileUpdateFailed(System.Exception ex);
+        public static event _onUserProfileUpdateFailed OnUserProfileUpdateFailed;
+
+        private FirebaseAuth auth = null;
+
+        private MainThreadExecutor executor;
+
+        public bool IsSignedIn
+        {
+            get => auth.CurrentUser != null;
         }
 
-        #endregion
-
-        private enum AuthUI : int
+        public FirebaseUser CurrentUser
         {
-            None = 0,
-            MethodSelection = 1,
-            UpgradeUserName = 2,
-            CustomUI = 3
+            get => auth?.CurrentUser;
         }
-
-        [Header("General Settings")]
-        [SerializeField]
-        private Button Button_Close = default;
-        [SerializeField]
-        private GameObject Container_Social = default;
-        [SerializeField]
-        private GameObject Container_MethodSelection = default;
-        [SerializeField]
-        private GameObject Container_UpgradeUsername = default;
-        [Header("Profile")]
-        [SerializeField]
-        private Button Button_UpgradeUsername = default;
-        [SerializeField]
-        private TMP_InputField Input_Username = default;
-
-        [Header("Auth Methods")]
-        [SerializeField]
-        private EmailAuth emailAuth = default;
-        [SerializeField]
-        private AnonymousAuth anonymousAuth = default;
-
-        private Dictionary<string, AuthMethod> Methodsdb = new Dictionary<string, AuthMethod>();
-
-        private AuthMethod currentMethod = null;
 
         private void Start()
         {
-            RegisterSingleton();
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
 
-            Button_UpgradeUsername.onClick.AddListener(() =>
-           {
-               AuthManager.Instance.UpdateProfile(Input_Username.text, string.Empty, 
-                   () =>
-                   {
-                       // Success
-                       Debug.Log("Profile Updated!");
-                       RequestLogin();
-                   }, (string msg) =>
-                   {
-                       // Failure
-                       Debug.LogError("Profile Failed to update!");
-                   });
-           });
+            _instance = this;
 
-            Button_Close.onClick.AddListener(() => UpdateUI(AuthUI.None));
+            auth = FirebaseAuth.DefaultInstance;
+            executor = MainThreadExecutor.Instance;
 
-            emailAuth.Initialize(this);
-            anonymousAuth.Initialize(this);
+            auth.StateChanged += Auth_StateChanged;
         }
 
-        public void RequestLogin(bool AnonymousConversion = false)
+        private void OnDestroy()
         {
-            if (AuthManager.Instance.IsLoggedIn())
+            auth.StateChanged -= Auth_StateChanged;
+        }
+
+        private void Auth_StateChanged(object sender, System.EventArgs e)
+        {
+            executor.Enquene(() => OnStateChanged?.Invoke());
+        }
+
+        private void HandleSingIn(System.Threading.Tasks.Task<FirebaseUser> task, System.Action OnComplete = null,
+            System.Action<System.Exception> OnFailure = null)
+        {
+            if (task.IsFaulted || task.IsCanceled)
             {
-                string username = AuthManager.Instance.CurrentUser.DisplayName;
-                if (string.IsNullOrEmpty(username))
+                System.Exception ex = task.Exception;
+                executor.Enquene(() =>
                 {
-                    Button_Close.gameObject.SetActive(false);
-                    UpdateUI(AuthUI.UpgradeUserName);
-                }
-                else
+                    OnFailure?.Invoke(ex);
+                    OnAuthFail?.Invoke(ex);
+                });
+
+                return;
+            }
+
+            executor.Enquene(() =>
+           {
+               OnAuthComplete?.Invoke();
+               OnComplete?.Invoke();
+           });
+        }
+
+        public void SignOut()
+        {
+            auth.SignOut();
+        }
+
+        public void SignInWithEmail(string email, string password, System.Action OnComplete = null, System.Action<System.Exception> OnFailure = null)
+        {
+            auth.SignInWithEmailAndPasswordAsync(email, password).ContinueWith(task =>
+           {
+               HandleSingIn(task, OnComplete, OnFailure);
+           });
+        }
+
+        public void SignInWithCredential(Credential credential, System.Action OnComplete = null, System.Action<System.Exception> OnFailure = null)
+        {
+            auth.SignInWithCredentialAsync(credential).ContinueWith(task =>
+           {
+               HandleSingIn(task, OnComplete, OnFailure);
+           });
+        }
+
+        public void SignInAnonymous(System.Action OnComplete = null, System.Action<System.Exception> OnFailure = null)
+        {
+            auth.SignInAnonymouslyAsync().ContinueWith(task =>
+           {
+               HandleSingIn(task, OnComplete, OnFailure);
+           });
+        }
+
+        public void LinkAccount(Credential credential, System.Action OnComplete = null, System.Action<System.Exception>
+            OnFailure = null)
+        {
+            if (IsSignedIn)
+            {
+                CurrentUser.LinkWithCredentialAsync(credential).ContinueWith(task =>
                 {
-                    if (AnonymousConversion && AuthMethod.IsAnonymousUser)
+                    if (task.IsFaulted || task.IsCanceled)
                     {
-                        Button_Close.gameObject.SetActive(true);
-                        UpdateUI(AuthUI.MethodSelection);
-                    }else
-                    {
-                        UpdateUI(AuthUI.None);
+                        System.Exception ex = task.Exception;
+
+                        executor.Enquene(() =>
+                        {
+                            OnFailure?.Invoke(ex);
+                            OnLinkAccountFail?.Invoke(ex);
+                        });
+                        return;
                     }
-                }
+
+                    executor.Enquene(() =>
+                   {
+                       OnComplete?.Invoke();
+                       OnLinkAccount?.Invoke();
+                   });
+
+                });
             }
             else
             {
-                Button_Close.gameObject.SetActive(false);
-                UpdateUI(AuthUI.MethodSelection);
+                executor.Enquene(() =>
+               {
+                   var ex = new System.Exception("User is not autenticated!");
+                   OnFailure?.Invoke(ex);
+                   OnLinkAccountFail?.Invoke(ex);
+               });
             }
         }
 
-        public void RegisterMethod(AuthMethod method, string MethodId)
+        public void UpdateProfile(string username, string PhotoUrl , System.Action OnComplete = null ,
+            System.Action<System.Exception> OnFailure = null)
         {
-            if (!Methodsdb.ContainsKey(MethodId))
+            bool goodUrl = !string.IsNullOrEmpty(PhotoUrl) &&
+                System.Uri.IsWellFormedUriString(PhotoUrl, System.UriKind.Absolute);
+
+            UserProfile profile = (goodUrl) ? new UserProfile()
             {
-                Methodsdb.Add(MethodId, method);
-            }
-        }
+                PhotoUrl = new System.Uri(PhotoUrl),
+                DisplayName = username
+            } : new UserProfile() { DisplayName = username };
 
-        public void ExecuteAuthMethod(string MethodId)
-        {
-            if (Methodsdb.TryGetValue(MethodId, out currentMethod))
+            auth.CurrentUser.UpdateUserProfileAsync(profile).ContinueWith(task =>
             {
-                IAuthCustomUI customUI = currentMethod as IAuthCustomUI;
-                if (customUI != null) UpdateUI(AuthUI.CustomUI);
-
-                currentMethod.OnSelect();
-
-                StartCoroutine(IExecuteMethod());
-            }
-        }
-
-        private void UpdateUI(AuthUI ui)
-        {
-            Container_Social.SetActive(ui != AuthUI.None);
-            Container_MethodSelection.SetActive(ui == AuthUI.MethodSelection);
-
-            if (Container_MethodSelection.activeInHierarchy)
-            {
-                bool GuestRequest = AuthManager.Instance.IsLoggedIn() && AuthManager.Instance.CurrentUser.IsAnonymous;
-
-                anonymousAuth.SetActive(!GuestRequest);
-            }
-
-            Container_UpgradeUsername.SetActive(ui == AuthUI.UpgradeUserName);
-        }
-
-        private IEnumerator IExecuteMethod()
-        {
-            float m_time = 0;
-            while (currentMethod != null)
-            {
-                AuthResult tres = currentMethod.OnExecute();
-
-                bool GotInput = currentMethod.GoBackInput();
-
-                bool InputValid = false;
-
-                if (GotInput && (Time.time - m_time) > 0.35f)
+                if (task.IsFaulted || task.IsCanceled)
                 {
-                    IAuthCustomUI customUI = currentMethod as IAuthCustomUI;
-                    InputValid = (customUI != null) && customUI.GoBack();
-                    m_time = Time.time;
-                }
-
-                if (tres == AuthResult.Success || tres == AuthResult.Failure || (tres == AuthResult.None && InputValid))
-                {
-                    if (tres == AuthResult.Success)
+                    System.Exception ex = task.Exception;
+                    executor.Enquene(() =>
                     {
-                       IAuthCustomUI customUI = currentMethod as IAuthCustomUI;
-                       customUI?.HideUI();
-                    }
-
-                    currentMethod.OnReset();
-                    currentMethod = null;
-
-                    if (tres == AuthResult.None)
-                        UpdateUI(AuthUI.MethodSelection);
-                    else if (tres == AuthResult.Success)
-                        RequestLogin();
-
-                    break;
+                        OnFailure?.Invoke(ex);
+                        OnUserProfileUpdateFailed?.Invoke(ex);
+                    });
+                    return;
                 }
 
-                yield return new WaitForEndOfFrame();
-            }
-            StopAllCoroutines();
+                executor.Enquene(() =>
+                {
+                    OnComplete?.Invoke();
+                    OnUserProfileUpdated?.Invoke();
+                });
+            });
         }
     }
 }
