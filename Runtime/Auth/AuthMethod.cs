@@ -27,6 +27,8 @@ namespace QSocial.Auth
 
         protected virtual void OnInit() { }
 
-        public virtual void OnFinish() { }
+        public virtual void OnEnter() { }
+
+        public virtual void OnFinish() { }  
     }
 }

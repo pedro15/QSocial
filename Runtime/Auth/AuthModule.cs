@@ -11,5 +11,7 @@ namespace QSocial.Auth
         public abstract bool IsCompleted();
 
         public virtual void OnFinish(AuthManager manager) { }
+
+        public virtual void OnInit(AuthManager manager) { }
     }
 }

@@ -1,11 +1,11 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
-using UnityEngine.UI;
+using QSocial.Auth.Modules;
 
 namespace QSocial.Auth
 {
+    [System.Serializable]
     public class AuthManager : MonoBehaviour
     {
         private static AuthManager _instance = null;
@@ -20,11 +20,21 @@ namespace QSocial.Auth
             }
         }
 
+        [Header("General Settings")]
+        [SerializeField]
+        private GameObject BaseLayout = default;
+        
+        [Header("Modules")]
+        [SerializeField]
+        private MenuModule SelectionMenu = default;
+        [SerializeField]
+        private SetupProfileModule SetupProfile = default;
+
         private AuthController controller;
 
         private Dictionary<string, AuthMethod> methodsdb;
 
-        private AuthModule[] Modules;
+        private AuthModule[] Modules = default;
 
         private bool ModulesRunning = false;
         private bool AuthRunning = false;
@@ -38,6 +48,16 @@ namespace QSocial.Auth
             }
             controller = AuthController.Instance;
             methodsdb = new Dictionary<string, AuthMethod>();
+
+            SelectionMenu.OnInit(this);
+            SetupProfile.OnInit(this);
+
+            Modules = new AuthModule[] { SelectionMenu, SetupProfile };
+        }
+
+        internal void DisplayLayout(bool display)
+        {
+            BaseLayout.SetActive(display);
         }
 
         public void RequestLogin(bool Guestvalid = false)
@@ -52,7 +72,6 @@ namespace QSocial.Auth
             for (int i = 0; i < Modules.Length; i++)
             {
                 AuthModule module = Modules[i];
-
                 if (module.IsValid(GuestRequest, controller.CurrentUser))
                 {
                     module.Execute(this);
@@ -60,6 +79,7 @@ namespace QSocial.Auth
                     module.OnFinish(this);
                 }
             }
+            DisplayLayout(false);
             ModulesRunning = false;
             yield return 0;
         }
@@ -68,7 +88,7 @@ namespace QSocial.Auth
         {
             if (!methodsdb.ContainsKey(method.Id))
             {
-                methodsdb.Add(method.Id , method);
+                methodsdb.Add(method.Id, method);
             }
         }
 
@@ -82,20 +102,22 @@ namespace QSocial.Auth
         {
             AuthMethod method = null;
 
-            if (methodsdb.TryGetValue(methodid , out method))
+            if (methodsdb.TryGetValue(methodid, out method))
             {
                 IAuthCustomUI customUI = method as IAuthCustomUI;
                 customUI?.DisplayUI();
+                
+                method.OnEnter();
 
                 IAuthCustomNavigation customNavigation = method as IAuthCustomNavigation;
 
-                while(true)
+                while (true)
                 {
                     bool goback = (customNavigation != null) ? customNavigation.GoBack() : Input.GetKey(KeyCode.Escape);
 
                     AuthResult tres = method.GetResult();
 
-                    if (tres == AuthResult.Completed || (tres == AuthResult.None && goback) )
+                    if (tres == AuthResult.Completed || (tres == AuthResult.None && goback))
                     {
                         if (tres == AuthResult.Completed)
                         {
@@ -111,7 +133,8 @@ namespace QSocial.Auth
 
                     yield return new WaitForEndOfFrame();
                 }
-            }else
+            }
+            else
             {
                 Debug.LogError("[AuthManager] Method not found: " + methodid);
             }
