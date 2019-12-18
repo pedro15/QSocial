@@ -21,26 +21,34 @@ namespace QSocial.Auth.Modules
         {
             SetupButton.onClick.AddListener(() =>
             {
-                AuthController.Instance.UpdateProfile(textUsername.text, string.Empty,
-                    () =>
-                    {
-                        Debug.Log("Update profile completed!");
-                        isFinished = true;
-                    }, (System.Exception ex) =>
-                   {
-                       Debug.LogError("Error updating profile " + ex?.Message);
-                   });
+                AuthManager.Instance.auth.CurrentUser?.UpdateUserProfileAsync
+                 (new UserProfile() { DisplayName = textUsername.text }).ContinueWith(task =>
+                 {
+                     if (task.IsCanceled || task.IsFaulted)
+                     {
+                         Debug.Log("Setup Profile failure!!");
+                         isFinished = false;
+
+                         return;
+                     }
+
+                     Debug.Log("Setup profile completed !!");
+                     isFinished = true;
+                 });
             });
         }
 
         public override void OnFinish(AuthManager manager)
         {
             FormContainer.SetActive(false);
+            manager.DisplayLayout(false);
         }
 
         public override void Execute(AuthManager manager)
         {
+            isFinished = false;
             FormContainer.SetActive(true);
+            manager.DisplayLayout(true);
         }
 
         public override bool IsCompleted()
@@ -50,6 +58,7 @@ namespace QSocial.Auth.Modules
 
         public override bool IsValid(bool GuestRequest, FirebaseUser user)
         {
+
             return (user != null && string.IsNullOrEmpty(user.DisplayName));
         }
     }

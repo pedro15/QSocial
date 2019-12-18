@@ -21,11 +21,19 @@ namespace QSocial.Auth
 
                 manager.RegisterAuthMethod(this);
                 Initialized = true;
+                OnInit(manager);
             }
         }
+
+        public void SetEnabled(bool enabled)
+        {
+            if (SelectionButton.gameObject.activeInHierarchy != enabled)
+                SelectionButton.gameObject.SetActive(enabled);
+        }
+
         public abstract AuthResult GetResult();
 
-        protected virtual void OnInit() { }
+        protected virtual void OnInit(AuthManager manager) { }
 
         public virtual void OnEnter() { }
 

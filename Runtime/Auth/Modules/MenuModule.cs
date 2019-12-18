@@ -9,18 +9,20 @@ namespace QSocial.Auth.Modules
     {
         [SerializeField]
         private GameObject LayoutContainer = default;
+        [SerializeField]
+        private Button[] MenuButtons = default;
 
         private bool isFinished = false;
+
+        public override void OnInit(AuthManager manager)
+        {
+            foreach (Button btn in MenuButtons) btn?.onClick.AddListener(() => isFinished = true);
+        }
 
         public override void Execute(AuthManager manager)
         {
             LayoutContainer.SetActive(true);
             manager.DisplayLayout(true);
-        }
-
-        public void Finish()
-        {
-            isFinished = true;
         }
 
         public override bool IsCompleted()

@@ -4,20 +4,20 @@ using UnityEngine;
 
 namespace QSocial.Utility
 {
-    internal class MainThreadExecutor : MonoBehaviour
+    public class QEventExecutor : MonoBehaviour
     {
-        private static MainThreadExecutor _Instance = null;
+        private static QEventExecutor _Instance = null;
 
-        public static MainThreadExecutor Instance
+        public static QEventExecutor Instance
         {
             get
             {
-                if (!_Instance) _Instance = FindObjectOfType<MainThreadExecutor>();
+                if (!_Instance) _Instance = FindObjectOfType<QEventExecutor>();
 
                 if (!_Instance)
                 {
                     GameObject obj = new GameObject("Q-Social_MainThreadExecutor");
-                    _Instance = obj.AddComponent<MainThreadExecutor>();
+                    _Instance = obj.AddComponent<QEventExecutor>();
                 }
 
                 return _Instance;

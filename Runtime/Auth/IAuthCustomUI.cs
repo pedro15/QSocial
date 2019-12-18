@@ -1,12 +1,8 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-
-namespace QSocial.Auth
+﻿namespace QSocial.Auth
 {
     public interface IAuthCustomUI
     {
-        void DisplayUI();
+        void DisplayUI(bool IsAnonymous);
 
         void HideUI();
 
