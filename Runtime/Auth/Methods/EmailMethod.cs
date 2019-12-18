@@ -37,6 +37,8 @@ namespace QSocial.Auth.Methods
 
         private int navigationIndex = 0;
 
+        private float lastbackInputTime = 0f;
+
         private bool ShouldGoBack = false;
 
         public override string Id => "Auth-Email";
@@ -149,18 +151,20 @@ namespace QSocial.Auth.Methods
         {
             if (navigationIndex == 1 )
             {
-                if (Input.GetKey(KeyCode.Escape))
+                if (Input.GetKey(KeyCode.Escape) && Time.time - lastbackInputTime > 0.2f)
                 {
                     navigationIndex = 0;
                     UpdateLayout(navigationIndex);
+                    lastbackInputTime = Time.time;
                     return false;
                 }
             }else if (navigationIndex == 0 && !ShouldGoBack)
             {
-                if (Input.GetKey(KeyCode.Escape))
+                if (Input.GetKey(KeyCode.Escape) && Time.time - lastbackInputTime > 0.2f)
                 {
                     navigationIndex = -1;
                     UpdateLayout(navigationIndex);
+                    lastbackInputTime = Time.time;
                     return true;
                 }
             }else if (ShouldGoBack)
