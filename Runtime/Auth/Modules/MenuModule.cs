@@ -35,10 +35,20 @@ namespace QSocial.Auth.Modules
             return user == null || (GuestRequest && user.IsAnonymous);
         }
 
-        public override void OnFinish(AuthManager manager)
+        public override void OnFinish(AuthManager manager, bool Interrupted)
         {
+            if (Interrupted)
+            {
+                manager.DisplayLayout(false);
+            }
+            
             LayoutContainer.SetActive(false);
             isFinished = false;
+        }
+
+        public override bool IsInterruptible()
+        {
+            return true;
         }
     }
 }

@@ -10,8 +10,10 @@ namespace QSocial.Auth
 
         public abstract bool IsCompleted();
 
-        public virtual void OnFinish(AuthManager manager) { }
+        public virtual void OnFinish(AuthManager manager, bool Interrupted) { }
 
         public virtual void OnInit(AuthManager manager) { }
+
+        public virtual bool IsInterruptible() => false;
     }
 }

@@ -151,12 +151,21 @@ namespace QSocial.Auth.Methods
         {
             if (navigationIndex == 1 )
             {
-                if (Input.GetKey(KeyCode.Escape) && Time.time - lastbackInputTime > 0.2f)
+                if (Input.GetKey(KeyCode.Escape) && 
+                    AuthManager.Instance.IsAuthenticated && AuthManager.Instance.auth.CurrentUser.IsAnonymous)
                 {
-                    navigationIndex = 0;
+                    navigationIndex = -1;
                     UpdateLayout(navigationIndex);
-                    lastbackInputTime = Time.time;
-                    return false;
+                    return true;
+                }else
+                {
+                    if (Input.GetKey(KeyCode.Escape) && Time.time - lastbackInputTime > 0.2f)
+                    {
+                        navigationIndex = 0;
+                        UpdateLayout(navigationIndex);
+                        lastbackInputTime = Time.time;
+                        return false;
+                    }
                 }
             }else if (navigationIndex == 0 && !ShouldGoBack)
             {

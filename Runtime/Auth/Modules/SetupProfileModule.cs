@@ -38,7 +38,7 @@ namespace QSocial.Auth.Modules
             });
         }
 
-        public override void OnFinish(AuthManager manager)
+        public override void OnFinish(AuthManager manager , bool interrupted)
         {
             FormContainer.SetActive(false);
             manager.DisplayLayout(false);

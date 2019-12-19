@@ -27,8 +27,7 @@ namespace QSocial.Auth
 
         public void SetEnabled(bool enabled)
         {
-            if (SelectionButton.gameObject.activeInHierarchy != enabled)
-                SelectionButton.gameObject.SetActive(enabled);
+            SelectionButton.gameObject.SetActive(enabled);
         }
 
         public abstract AuthResult GetResult();

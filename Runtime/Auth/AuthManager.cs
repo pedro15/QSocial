@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using System.Reflection;
 using Firebase.Auth;
 using QSocial.Auth.Modules;
@@ -26,7 +27,9 @@ namespace QSocial.Auth
         [Header("General Settings")]
         [SerializeField]
         private GameObject BaseLayout = default;
-        
+        [SerializeField]
+        private Button ExitBackground = default;
+
         [Header("Modules")]
         [SerializeField]
         private MenuModule SelectionMenu = default;
@@ -48,6 +51,9 @@ namespace QSocial.Auth
 
         private bool ModulesRunning = false;
         private bool AuthRunning = false;
+        private bool WasrequestedbyGuest = false;
+        private bool ExitRequest = false;
+        private float ExitTime = 0f;
 
         private void Start()
         {
@@ -58,6 +64,12 @@ namespace QSocial.Auth
             }
             auth = FirebaseAuth.DefaultInstance;
             methodsdb = new Dictionary<string, AuthMethod>();
+
+            ExitBackground.onClick.AddListener(() =>
+            {
+                ExitRequest = true;
+                ExitTime = Time.time;
+            });
 
             SelectionMenu.OnInit(this);
             SetupProfile.OnInit(this);
@@ -82,6 +94,7 @@ namespace QSocial.Auth
         private IEnumerator I_CheckLogin(bool GuestRequest = false)
         {
             ModulesRunning = true;
+            WasrequestedbyGuest = GuestRequest;
             ValidateMethods();
             for (int i = 0; i < Modules.Length; i++)
             {
@@ -89,8 +102,23 @@ namespace QSocial.Auth
                 if (module.IsValid(GuestRequest, auth.CurrentUser))
                 {
                     module.Execute(this);
-                    yield return new WaitUntil(() => module.IsCompleted());
-                    module.OnFinish(this);
+                    yield return new WaitUntil(() =>
+                    {
+                        float diff = Time.time - ExitTime;
+                        if (module.IsInterruptible() && ExitRequest && diff > 0.2f && diff < 0.5f )
+                        {
+                            return true;
+                        }
+
+                        if (diff >= 0.5f)
+                        {
+                            ExitTime = 0f;
+                        }
+
+                        return module.IsCompleted();
+                    });
+                    module.OnFinish(this , ExitRequest);
+                    ExitRequest = false;
                 }
             }
             ModulesRunning = false;
@@ -109,7 +137,11 @@ namespace QSocial.Auth
                 {
                     if (auth.CurrentUser != null && auth.CurrentUser.IsAnonymous)
                     {
-                        if (method.GetType().GetCustomAttribute(typeof(HasAnonymousConversionAttribute)) != null)
+                        var attr = method.GetType().GetCustomAttribute<HasAnonymousConversionAttribute>();
+
+                        Debug.Log($"{ method.GetType().FullName } {(attr != null).ToString()} ");
+
+                        if (attr != null)
                         {
                             method.SetEnabled(true);
                         }else
@@ -144,6 +176,7 @@ namespace QSocial.Auth
 
             if (methodsdb.TryGetValue(methodid, out method))
             {
+                DisplayLayout(true);
                 AuthRunning = true;
                 IAuthCustomUI customUI = method as IAuthCustomUI;
                 customUI?.DisplayUI(auth.CurrentUser != null && auth.CurrentUser.IsAnonymous);
@@ -160,8 +193,6 @@ namespace QSocial.Auth
 
                     if (tres == AuthResult.Completed || (tres == AuthResult.None && goback))
                     {
-                        Debug.Log("END!");
-
                         if (tres == AuthResult.Completed)
                         {
                             method.OnFinish();
@@ -169,7 +200,7 @@ namespace QSocial.Auth
 
                         customUI?.HideUI();
 
-                        RequestLogin();
+                        RequestLogin(WasrequestedbyGuest);
 
                         break;
                     }
