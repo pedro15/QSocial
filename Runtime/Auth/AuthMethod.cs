@@ -7,7 +7,12 @@ namespace QSocial.Auth
     public abstract class AuthMethod
     {
         [SerializeField]
+        private bool enabled = true;
+
+        [SerializeField]
         private Button SelectionButton = default;
+        
+        public bool Enabled { get => enabled; }
 
         public abstract string Id { get; }
 
@@ -36,6 +41,8 @@ namespace QSocial.Auth
 
         public virtual void OnEnter() { }
 
-        public virtual void OnFinish() { }  
+        public virtual void OnFinish() { }
+
+        public virtual System.Exception GetException() => null;
     }
 }

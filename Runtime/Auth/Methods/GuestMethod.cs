@@ -9,6 +9,10 @@ namespace QSocial.Auth.Methods
 
         private AuthResult tres = AuthResult.None;
 
+        private System.Exception ex;
+
+        public override System.Exception GetException() => ex;
+
         public override void OnEnter()
         {
             Debug.Log("GuestMethod!!");
@@ -18,15 +22,10 @@ namespace QSocial.Auth.Methods
                 if (task.IsCanceled || task.IsFaulted)
                 {
                     Debug.LogError("Auth Anonymous Failure!");
+                    ex = task.Exception;
                     tres = AuthResult.Failure;
                     return;
                 }
-
-                //QEventExecutor.Instance.Enquene(() =>
-                //{
-                //    Debug.Log("Auth Anonymous Completed !");
-                //    tres = AuthResult.Completed;
-                //});
 
                 Debug.Log("Auth Anonymous Completed !");
                 tres = AuthResult.Completed;

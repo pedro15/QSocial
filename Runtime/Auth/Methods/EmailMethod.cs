@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Firebase.Auth;
 
 namespace QSocial.Auth.Methods
 {
@@ -41,6 +42,8 @@ namespace QSocial.Auth.Methods
 
         private bool ShouldGoBack = false;
 
+        private System.Exception ex;
+
         public override string Id => "Auth-Email";
 
         public override void OnEnter()
@@ -48,6 +51,8 @@ namespace QSocial.Auth.Methods
             ShouldGoBack = false;
             result = AuthResult.None;
         }
+
+        public override System.Exception GetException() => ex;
 
         protected override void OnInit(AuthManager manager)
         {
@@ -74,28 +79,60 @@ namespace QSocial.Auth.Methods
 
             RegisterButton.onClick.AddListener(() =>
             {
-                if (string.Equals(Password_Register.text , Password_Register_c.text))
+                result = AuthResult.Running;
+                Debug.Log("Create user with email!");
+                if (!string.IsNullOrEmpty(Password_Register.text) && 
+                string.Equals(Password_Register.text , Password_Register_c.text))
                 {
-                    Debug.Log("Create user with email!");
-                    result = AuthResult.Running;
-                    AuthManager.Instance.auth.CreateUserWithEmailAndPasswordAsync(Email_Register.text,
-                        Password_Register.text).ContinueWith(task =>
+
+                    if (AuthManager.Instance.IsAuthenticated)
+                    {
+                        if (AuthManager.Instance.auth.CurrentUser.IsAnonymous)
                         {
-                            if (task.IsFaulted || task.IsCanceled)
+                            Credential ecred = EmailAuthProvider.GetCredential(Email_Register.text,
+                                Password_Register.text);
+
+                            AuthManager.Instance.auth.CurrentUser.LinkWithCredentialAsync(ecred).ContinueWith
+                            (task =>
                             {
-                                Debug.LogError("Create user with email failed " + task.Exception?.Message);
-                                result = AuthResult.Failure;
+                                if (task.IsFaulted || task.IsCanceled)
+                                {
+                                    Debug.LogError("Fail to link account! " + task.Exception?.ToString());
+                                    ex = task.Exception;
+                                    result = AuthResult.Failure;
+                                    return;
+                                }
 
-                                return;
-                            }
+                                Debug.Log("Link account completed !");
+                                result = AuthResult.Completed;
+                            });
+                        }else
+                        {
+                            Debug.LogError("User is not Anonymouus!");
+                            result = AuthResult.Failure;
+                        }
+                    }else
+                    {
+                        AuthManager.Instance.auth.CreateUserWithEmailAndPasswordAsync(Email_Register.text,
+                               Password_Register.text).ContinueWith(task =>
+                               {
+                                   if (task.IsFaulted || task.IsCanceled)
+                                   {
+                                       Debug.LogError("Create user with email failed " + task.Exception?.Message);
+                                       ex = task.Exception;
+                                       result = AuthResult.Failure;
+                                       return;
+                                   }
 
-                            Debug.Log("Create user with email completed !");
-                            result = AuthResult.Completed;
+                                   Debug.Log("Create user with email completed !");
+                                   result = AuthResult.Completed;
 
-                        });
-                    
+                               });
+                    }
                 }else
                 {
+                    ex = new System.Exception("Passwords must match!");
+                    result = AuthResult.Failure;
                     Debug.LogWarning("Passwords must match !");
                 }
             });
@@ -110,8 +147,8 @@ namespace QSocial.Auth.Methods
                      if (task.IsFaulted || task.IsCanceled)
                      {
                          Debug.LogError("Sing in with email failed " + task.Exception?.Message);
+                         ex = task.Exception;
                          result = AuthResult.Failure;
-
                          return;
                      }
 
