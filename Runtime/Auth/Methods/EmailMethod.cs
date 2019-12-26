@@ -3,44 +3,64 @@ using UnityEngine.UI;
 using TMPro;
 using Firebase.Auth;
 
+using QSocial.Utility;
+
 namespace QSocial.Auth.Methods
 {
     [HasAnonymousConversion,System.Serializable]
     public class EmailMethod : AuthMethod,IAuthCustomUI,IAuthCustomNavigation
     {
-        [Header("Layout")]
+        enum emailNavigation
+        {
+            None = -1,
+            LoginForm = 0,
+            RegisterForm = 1,
+            ForgotPassword = 2,
+            ForgotPasswordFinish = 3
+        }
+
+        [Header("SingIn-Form")]
         [SerializeField]
-        private GameObject SinginForm = default;
+        private GameObject form_SingIn = default;
         [SerializeField]
         private Button RegisterFormButton = default;
         [SerializeField]
-        private Button BackButton = default;
+        private TMP_InputField Email_SingIn = default;
         [SerializeField]
-        private GameObject RegisterForm = default;
-        [Header("Action Buttons")]
+        private TMP_InputField Password_SingIn = default;
         [SerializeField]
-        private Button RegisterButton = default;
+        private Button ForgotPasswordButton = default;
         [SerializeField]
         private Button SingInButton = default;
-        [Header("Input")]
+        [Header("Register-Form")]
+        [SerializeField]
+        private GameObject form_Register = default;
+        [SerializeField]
+        private Button RegisterButton = default;
         [SerializeField]
         private TMP_InputField Email_Register = default;
         [SerializeField]
         private TMP_InputField Password_Register = default;
         [SerializeField]
         private TMP_InputField Password_Register_c = default;
+        [Header("ForgotPassword-Form")]
         [SerializeField]
-        private TMP_InputField Email_SingIn = default;
+        private GameObject form_ForgotPassword = default;
         [SerializeField]
-        private TMP_InputField Password_SingIn = default;
+        private TMP_InputField Email_Recoverpassword = default;
+        [SerializeField]
+        private Button RecoverPasswordButton = default;
+        [Header("ForgotPassword-Completed")]
+        [SerializeField]
+        private GameObject form_ForgotPwFinish = default;
+        [SerializeField]
+        private Button BackToSingInButton = default;
 
         private AuthResult result = AuthResult.None;
 
-        private int navigationIndex = 0;
+        private emailNavigation nav = emailNavigation.LoginForm;
 
-        private float lastbackInputTime = 0f;
-
-        private bool ShouldGoBack = false;
+        private bool BackResult = false;
 
         private System.Exception ex;
 
@@ -48,7 +68,6 @@ namespace QSocial.Auth.Methods
 
         public override void OnEnter()
         {
-            ShouldGoBack = false;
             result = AuthResult.None;
         }
 
@@ -58,23 +77,51 @@ namespace QSocial.Auth.Methods
         {
             RegisterFormButton.onClick.AddListener(() =>
            {
-               navigationIndex = 1;
-               UpdateLayout(navigationIndex);
+               nav = emailNavigation.RegisterForm;
+               UpdateLayout();
            });
 
-            BackButton?.onClick.AddListener(() =>
+            BackToSingInButton.onClick.AddListener(() =>
+           {
+               nav = emailNavigation.LoginForm;
+               UpdateLayout();
+           });
+
+            ForgotPasswordButton.onClick.AddListener(() =>
             {
-                if (navigationIndex == 1)
+                nav = emailNavigation.ForgotPassword;
+                UpdateLayout();
+            });
+
+            RecoverPasswordButton.onClick.AddListener(() =>
+            {
+                result = AuthResult.Running;
+                Debug.Log("Recover email password");
+
+                if (!string.IsNullOrEmpty(Email_SingIn.text))
+                    Email_Recoverpassword.text = Email_SingIn.text;
+
+                AuthManager.Instance.auth.SendPasswordResetEmailAsync(Email_Recoverpassword.text).ContinueWith
+                (task =>
                 {
-                    navigationIndex = 0;
-                    UpdateLayout(navigationIndex);
-                }
-                else if (navigationIndex == 0)
-                {
-                    navigationIndex = -1;
-                    UpdateLayout(navigationIndex);
-                    ShouldGoBack = true;
-                }
+                    if (task.IsFaulted || task.IsCanceled)
+                    {
+                        Debug.Log("Fail to recover email!");
+                        ex = task.Exception;
+                        result = AuthResult.Failure;
+                        return;
+                    }
+
+                    Debug.Log("Recover password sent!");
+
+                    QEventExecutor.ExecuteInUpdate(() =>
+                   {
+                       nav = emailNavigation.ForgotPasswordFinish;
+                       UpdateLayout();
+                   });
+
+                    result = AuthResult.Running;
+                });
             });
 
             RegisterButton.onClick.AddListener(() =>
@@ -160,11 +207,13 @@ namespace QSocial.Auth.Methods
             });
         }
 
-        private void UpdateLayout(int index)
+        private void UpdateLayout()
         {
-            RegisterForm.SetActive(index == 1);
-            SinginForm.SetActive(index == 0);
-            BackButton?.gameObject.SetActive(index >= 0);
+            Debug.Log($"UpdateLayout :: { nav }");
+            form_Register.SetActive(nav == emailNavigation.RegisterForm);
+            form_SingIn.SetActive(nav == emailNavigation.LoginForm);
+            form_ForgotPassword.SetActive(nav == emailNavigation.ForgotPassword);
+            form_ForgotPwFinish.SetActive(nav == emailNavigation.ForgotPasswordFinish);
         }
 
         public override AuthResult GetResult()
@@ -174,52 +223,64 @@ namespace QSocial.Auth.Methods
 
         public void DisplayUI(bool IsAnonymous)
         {
-            navigationIndex = IsAnonymous ? 1 : 0;
-            UpdateLayout(navigationIndex);
+            nav = IsAnonymous ? emailNavigation.RegisterForm : emailNavigation.LoginForm;
+            UpdateLayout();
         }
 
         public void HideUI()
         {
-            SinginForm.SetActive(false);
-            RegisterForm.SetActive(false);
+            nav = emailNavigation.None;
+            BackResult = false;
+            UpdateLayout();
         }
 
-        public bool GoBack()
+        public override void OnUpdate()
         {
-            if (navigationIndex == 1 )
+            if (Input.GetKeyDown(KeyCode.Escape))
             {
-                if (Input.GetKey(KeyCode.Escape) && 
-                    AuthManager.Instance.IsAuthenticated && AuthManager.Instance.auth.CurrentUser.IsAnonymous)
+                if (AuthManager.Instance.IsAuthenticated && AuthManager.Instance.auth.CurrentUser.IsAnonymous)
                 {
-                    navigationIndex = -1;
-                    UpdateLayout(navigationIndex);
-                    return true;
-                }else
+                    nav = emailNavigation.None;
+                    UpdateLayout();
+                    BackResult = true;
+                }
+                else
                 {
-                    if (Input.GetKey(KeyCode.Escape) && Time.time - lastbackInputTime > 0.2f)
+                    switch (nav)
                     {
-                        navigationIndex = 0;
-                        UpdateLayout(navigationIndex);
-                        lastbackInputTime = Time.time;
-                        return false;
+                        case emailNavigation.ForgotPassword:
+
+                            nav = emailNavigation.LoginForm;
+
+                            break;
+
+                        case emailNavigation.ForgotPasswordFinish:
+
+                            nav = emailNavigation.ForgotPassword;
+
+                            break;
+
+                        case emailNavigation.RegisterForm:
+
+                            nav = emailNavigation.LoginForm;
+
+                            break;
+
+                        case emailNavigation.LoginForm:
+
+                            nav = emailNavigation.None;
+
+                            break;
                     }
+                    UpdateLayout();
+                    BackResult = (nav != emailNavigation.None) ? false : true;
                 }
-            }else if (navigationIndex == 0 && !ShouldGoBack)
+            }else if (Input.GetKeyUp(KeyCode.Escape))
             {
-                if (Input.GetKey(KeyCode.Escape) && Time.time - lastbackInputTime > 0.2f)
-                {
-                    navigationIndex = -1;
-                    UpdateLayout(navigationIndex);
-                    lastbackInputTime = Time.time;
-                    return true;
-                }
-            }else if (ShouldGoBack)
-            {
-                navigationIndex = -1;
-                UpdateLayout(navigationIndex);
-                return true;
+                BackResult = false;
             }
-            return false;
         }
+
+        public bool GoBack() => BackResult;
     }
 }

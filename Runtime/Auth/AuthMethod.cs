@@ -39,6 +39,8 @@ namespace QSocial.Auth
 
         protected virtual void OnInit(AuthManager manager) { }
 
+        public virtual void OnUpdate() { }
+
         public virtual void OnEnter() { }
 
         public virtual void OnFinish() { }

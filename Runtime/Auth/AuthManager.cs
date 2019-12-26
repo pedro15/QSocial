@@ -1,11 +1,13 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
+
 using UnityEngine;
 using UnityEngine.UI;
-using System.Reflection;
+
 using Firebase.Auth;
-using QSocial.Auth.Modules;
 using QSocial.Auth.Methods;
+using QSocial.Auth.Modules;
 
 namespace QSocial.Auth
 {
@@ -58,6 +60,7 @@ namespace QSocial.Auth
 
         private Dictionary<string, AuthModule> modulesdb;
 
+        private AuthMethod selectedMethod = null;
 
         private AuthModule[] AuthModules = default;
 
@@ -75,6 +78,7 @@ namespace QSocial.Auth
                 return;
             }
             auth = FirebaseAuth.DefaultInstance;
+
             methodsdb = new Dictionary<string, AuthMethod>();
             modulesdb = new Dictionary<string, AuthModule>();
 
@@ -89,10 +93,21 @@ namespace QSocial.Auth
             anonymousMethod.Init(this);
         }
 
+        private void Update()
+        {
+            if (AuthRunning && selectedMethod != null)
+            {
+                selectedMethod.OnUpdate();
+            }
+        }
+
         private void RequestExit()
         {
-            ExitRequest = true;
-            ExitTime = Time.time;
+            if (ModulesRunning)
+            {
+                ExitRequest = true;
+                ExitTime = Time.time;
+            }
         }
 
         internal void DisplayLayout(bool display)
@@ -126,33 +141,34 @@ namespace QSocial.Auth
                         {
                             RequestExit();
                         }
-                        
+
                         float diff = Time.time - ExitTime;
-                        if (module.IsInterruptible() && ExitRequest && diff > 0.2f && diff < 0.5f )
+                        if (module.IsInterruptible() && ExitRequest && diff > 0.2f && diff < 0.5f)
                         {
                             if (IsAuthenticated)
                             {
                                 return true;
-                            }else
+                            }
+                            else
                             {
                                 ExitRequest = false;
                                 return false;
                             }
                         }
 
-                        if (diff >= 0.5f)
+                        if (diff >= 0.55f)
                         {
-                            ExitTime = 0f;
+                            ExitTime = 0;
                         }
 
                         return module.IsCompleted();
                     });
-                    module.OnFinish(this , ExitRequest);
+                    module.OnFinish(this, ExitRequest);
                     ExitRequest = false;
 
                 }
 
-                if (!hasvalidated && i == AuthModules.Length -1)
+                if (!hasvalidated && i == AuthModules.Length - 1)
                 {
                     DisplayLayout(false);
                 }
@@ -166,11 +182,11 @@ namespace QSocial.Auth
         {
             string[] keys = new string[methodsdb.Keys.Count];
 
-            methodsdb.Keys.CopyTo(keys,0);
+            methodsdb.Keys.CopyTo(keys, 0);
 
             for (int i = 0; i < keys.Length; i++)
             {
-                if (methodsdb.TryGetValue(keys[i] , out AuthMethod method))
+                if (methodsdb.TryGetValue(keys[i], out AuthMethod method))
                 {
                     if (!method.Enabled)
                     {
@@ -185,11 +201,13 @@ namespace QSocial.Auth
                         if (attr != null)
                         {
                             method.SetEnabled(true);
-                        }else
+                        }
+                        else
                         {
                             method.SetEnabled(false);
                         }
-                    }else
+                    }
+                    else
                     {
                         method.SetEnabled(true);
                     }
@@ -213,25 +231,24 @@ namespace QSocial.Auth
 
         private IEnumerator I_ExecuteMethod(string methodid)
         {
-            AuthMethod method = null;
-
-            if (methodsdb.TryGetValue(methodid, out method))
+            if (methodsdb.TryGetValue(methodid, out selectedMethod))
             {
                 DisplayLayout(true);
                 AuthRunning = true;
-                IAuthCustomUI customUI = method as IAuthCustomUI;
+                IAuthCustomUI customUI = selectedMethod as IAuthCustomUI;
                 customUI?.DisplayUI(auth.CurrentUser != null && auth.CurrentUser.IsAnonymous);
 
-                IAuthCustomNavigation customNavigation = method as IAuthCustomNavigation;
+                IAuthCustomNavigation customNavigation = selectedMethod as IAuthCustomNavigation;
                 AuthResult tres = AuthResult.None;
 
             process:
-                method.OnEnter();
+                selectedMethod.OnEnter();
+
                 do
                 {
-                    tres = method.GetResult();
+                    tres = selectedMethod.GetResult();
                     bool goback = (customNavigation != null) ? customNavigation.GoBack() : Input.GetKey(KeyCode.Escape);
-                    
+
                     if (customUI != null && tres == AuthResult.None && goback)
                     {
                         customUI?.HideUI();
@@ -242,12 +259,12 @@ namespace QSocial.Auth
                     yield return new WaitForEndOfFrame();
 
                 } while (tres == AuthResult.None || tres == AuthResult.Running);
-                
+
                 if (tres == AuthResult.Completed)
                 {
                     if (tres == AuthResult.Completed)
                     {
-                        method.OnFinish();
+                        selectedMethod.OnFinish();
                     }
 
                     customUI?.HideUI();
@@ -258,8 +275,8 @@ namespace QSocial.Auth
                 }
                 else if (tres == AuthResult.Failure)
                 {
-                    OnAuthFail?.Invoke(method.GetException());
-                    method.OnFinish();
+                    OnAuthFail?.Invoke(selectedMethod.GetException());
+                    selectedMethod.OnFinish();
                     tres = AuthResult.None;
                     goto process;
                 }
@@ -270,6 +287,7 @@ namespace QSocial.Auth
             }
 
             AuthRunning = false;
+            selectedMethod = null;
             yield return 0;
         }
 
