@@ -56,7 +56,10 @@ namespace QSocial.Auth
 
         private Dictionary<string, AuthMethod> methodsdb;
 
-        private AuthModule[] Modules = default;
+        private Dictionary<string, AuthModule> modulesdb;
+
+
+        private AuthModule[] AuthModules = default;
 
         private bool ModulesRunning = false;
         private bool AuthRunning = false;
@@ -73,13 +76,14 @@ namespace QSocial.Auth
             }
             auth = FirebaseAuth.DefaultInstance;
             methodsdb = new Dictionary<string, AuthMethod>();
+            modulesdb = new Dictionary<string, AuthModule>();
 
             ExitBackground.onClick.AddListener(() => RequestExit());
 
             SelectionMenu.OnInit(this);
             SetupProfile.OnInit(this);
 
-            Modules = new AuthModule[] { SelectionMenu, SetupProfile };
+            AuthModules = new AuthModule[] { SelectionMenu, SetupProfile };
 
             emailMethod.Init(this);
             anonymousMethod.Init(this);
@@ -109,9 +113,9 @@ namespace QSocial.Auth
             WasrequestedbyGuest = GuestRequest;
             ValidateMethods();
             float time_enter = Time.time;
-            for (int i = 0; i < Modules.Length; i++)
+            for (int i = 0; i < AuthModules.Length; i++)
             {
-                AuthModule module = Modules[i];
+                AuthModule module = AuthModules[i];
                 if (module.IsValid(GuestRequest, auth.CurrentUser))
                 {
                     hasvalidated = true;
@@ -148,7 +152,7 @@ namespace QSocial.Auth
 
                 }
 
-                if (!hasvalidated && i == Modules.Length -1)
+                if (!hasvalidated && i == AuthModules.Length -1)
                 {
                     DisplayLayout(false);
                 }
@@ -218,13 +222,11 @@ namespace QSocial.Auth
                 IAuthCustomUI customUI = method as IAuthCustomUI;
                 customUI?.DisplayUI(auth.CurrentUser != null && auth.CurrentUser.IsAnonymous);
 
-                method.OnEnter();
-
                 IAuthCustomNavigation customNavigation = method as IAuthCustomNavigation;
-                
                 AuthResult tres = AuthResult.None;
 
             process:
+                method.OnEnter();
                 do
                 {
                     tres = method.GetResult();
@@ -257,6 +259,7 @@ namespace QSocial.Auth
                 else if (tres == AuthResult.Failure)
                 {
                     OnAuthFail?.Invoke(method.GetException());
+                    method.OnFinish();
                     tres = AuthResult.None;
                     goto process;
                 }
