@@ -3,6 +3,8 @@ using UnityEngine.UI;
 using TMPro;
 using Firebase.Auth;
 
+using QSocial.Data;
+using QSocial.Data.Users;
 using QSocial.Utility;
 
 namespace QSocial.Auth.Methods
@@ -172,6 +174,11 @@ namespace QSocial.Auth.Methods
                                    }
 
                                    Debug.Log("Create user with email completed !");
+                                   
+                                   QDataManager.Instance.RegisterPlayerToDatabase(new UserPlayer(task.Result.UserId,
+                                       new string[] { }));
+
+
                                    result = AuthResult.Completed;
 
                                });

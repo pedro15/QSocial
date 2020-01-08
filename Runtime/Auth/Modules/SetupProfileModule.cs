@@ -2,6 +2,8 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using QSocial.Data.Users;
+using QSocial.Data;
 
 namespace QSocial.Auth.Modules
 {
@@ -21,21 +23,38 @@ namespace QSocial.Auth.Modules
         {
             SetupButton.onClick.AddListener(() =>
             {
-                AuthManager.Instance.auth.CurrentUser?.UpdateUserProfileAsync
+                SetupNickname();
+            });
+            QDataManager.OnUserPlayerRecivedData += QDataManager_OnUserPlayerRecivedData;
+
+        }
+
+        private void QDataManager_OnUserPlayerRecivedData(UserPlayer userPlayer)
+        {
+            if (userPlayer != null)
+            {
+                SetupNickname();
+            }
+        }
+
+        private void SetupNickname()
+        {
+            AuthManager.Instance.auth.CurrentUser?.UpdateUserProfileAsync
                  (new UserProfile() { DisplayName = textUsername.text }).ContinueWith(task =>
                  {
                      if (task.IsCanceled || task.IsFaulted)
                      {
                          Debug.Log("Setup Profile failure!!");
                          isFinished = false;
-
                          return;
                      }
+
+                     QDataManager.Instance.RegisterNickname(textUsername.text,
+                         AuthManager.Instance.auth.CurrentUser.UserId);
 
                      Debug.Log("Setup profile completed !!");
                      isFinished = true;
                  });
-            });
         }
 
         public override void OnFinish(AuthManager manager , bool interrupted)
