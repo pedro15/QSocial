@@ -10,6 +10,8 @@ namespace QSocial.Data
 {
     public class QDataManager : MonoBehaviour
     {
+        private const string UsersNodePath = "users";
+
         private static QDataManager _instance = null; 
 
         public static QDataManager Instance
@@ -21,11 +23,9 @@ namespace QSocial.Data
                 return _instance;
             }
         }
+
         [SerializeField]
         private string DatabaseUrl = default;
-        [SerializeField]
-        private string UsersNodePath = "users";
-
         private void Awake()
         {
             if (_instance != null && _instance != this)
