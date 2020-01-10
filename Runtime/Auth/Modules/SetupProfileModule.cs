@@ -2,7 +2,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using QSocial.Data.Users;
+using QWordFilter = QSocial.Utility.QWordFilter;
 using QSocial.Data;
 
 namespace QSocial.Auth.Modules
@@ -25,36 +25,45 @@ namespace QSocial.Auth.Modules
             {
                 SetupNickname();
             });
-            QDataManager.OnUserPlayerRecivedData += QDataManager_OnUserPlayerRecivedData;
-
-        }
-
-        private void QDataManager_OnUserPlayerRecivedData(UserPlayer userPlayer)
-        {
-            if (userPlayer != null)
-            {
-                SetupNickname();
-            }
         }
 
         private void SetupNickname()
         {
-            AuthManager.Instance.auth.CurrentUser?.UpdateUserProfileAsync
-                 (new UserProfile() { DisplayName = textUsername.text }).ContinueWith(task =>
-                 {
-                     if (task.IsCanceled || task.IsFaulted)
-                     {
-                         Debug.Log("Setup Profile failure!!");
-                         isFinished = false;
-                         return;
-                     }
+            FirebaseUser usr = AuthManager.Instance.auth.CurrentUser;
 
-                     QDataManager.Instance.RegisterNickname(textUsername.text,
-                         AuthManager.Instance.auth.CurrentUser.UserId);
+            string username = textUsername.text;
 
-                     Debug.Log("Setup profile completed !!");
-                     isFinished = true;
-                 });
+            if (QWordFilter.IsValidString(username))
+            {
+                QDataManager.Instance.NicknameValid(username, (bool result) =>
+                {
+                    if (result)
+                    {
+                        QDataManager.Instance.RegisterNickname(username, usr.UserId, () => {
+                            usr?.UpdateUserProfileAsync
+                            (new UserProfile() { DisplayName = username }).ContinueWith(task =>
+                            {
+                                if (task.IsCanceled || task.IsFaulted)
+                                {
+                                    Debug.Log("Setup Profile failure!!");
+                                    isFinished = false;
+                                    return;
+                                }
+                                Debug.Log("Setup profile completed !!");
+                                isFinished = true;
+                            });
+                        },
+                        (System.Exception ex) => Debug.LogError("An error ocurrer at register nickname " + ex));
+                    }
+                    else
+                    {
+                        Debug.LogWarning("nickname exists");
+                    }
+                }, (System.Exception ex) => Debug.LogError("Error checking username " + ex));
+            }else
+            {
+                Debug.LogWarning("Invalid Username!");
+            }
         }
 
         public override void OnFinish(AuthManager manager , bool interrupted)
@@ -77,7 +86,6 @@ namespace QSocial.Auth.Modules
 
         public override bool IsValid(bool GuestRequest, FirebaseUser user)
         {
-
             return (user != null && string.IsNullOrEmpty(user.DisplayName));
         }
     }

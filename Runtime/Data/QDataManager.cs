@@ -26,16 +26,6 @@ namespace QSocial.Data
         [SerializeField]
         private string UsersNodePath = "users";
 
-        public delegate void onUserPlayerRecivedData(UserPlayer userPlayer);
-
-        public static event onUserPlayerRecivedData OnUserPlayerRecivedData;
-
-        public delegate void onPushUserData();
-
-        public static event onPushUserData OnPushUserData;
-
-        Queue<UserPlayer> _userPlayers = new Queue<UserPlayer>();
-
         private void Awake()
         {
             if (_instance != null && _instance != this)
@@ -50,14 +40,10 @@ namespace QSocial.Data
         private void Start()
         {
             Firebase.FirebaseApp.DefaultInstance.SetEditorDatabaseUrl(DatabaseUrl);
-
-            OnUserPlayerRecivedData += (UserPlayer p) =>
-            {
-                Debug.Log(p);
-            };
         }
 
-        public void RequestPlayerFromId(string uid)
+        public void GetPlayerFromId(string uid , System.Action<UserPlayer> OnComplete = null , 
+            System.Action<System.Exception> OnFailure = null)
         {
             UserPlayer user = null;
             DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(UsersNodePath).Child(uid);
@@ -67,7 +53,8 @@ namespace QSocial.Data
                 {
                     QEventExecutor.ExecuteInUpdate(() =>
                     {
-                        Debug.LogError("Error executing query!" + task.Exception?.Message);
+                        Debug.LogError("Error executing query! " + task.Exception);
+                        OnFailure?.Invoke(task.Exception);
                     });
 
                     return;
@@ -78,27 +65,32 @@ namespace QSocial.Data
                     try
                     {
                         string json = task.Result.GetRawJsonValue();
+                        Debug.Log("Recived JSON: " + json);
 
                         var root = JSON.Parse(json);
 
-                        string friends = root["friends"];
+                        JSONNode friends_Node = root["friends"];
+                        string[] friends = new string[friends_Node.Count];
 
-                        Debug.Log("JSON: " + json);
+                        for (int i = 0; i < friends.Length; i++)
+                        {
+                            friends[i] = friends_Node[i].Value;
+                        }
 
-                        user = new UserPlayer(uid, friends.Split(','));
+                        user = new UserPlayer(uid,friends);
 
-                        _userPlayers.Enqueue(user);
+                        OnComplete?.Invoke(user);
                     }
                     catch
                     {
-                        Debug.LogWarning("Invalid JSON from user request");
-                        _userPlayers.Enqueue(null);
+                        OnFailure?.Invoke(new System.Exception("Invalid JSON from user request"));
                     }
                 });
             });
         }
 
-        public void RegisterPlayerToDatabase(UserPlayer player)
+        public void RegisterPlayerToDatabase(UserPlayer player , System.Action OnComplete = null , 
+            System.Action<System.Exception> OnFalure = null)
         {
             DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(UsersNodePath).Child(player.userid);
 
@@ -109,6 +101,7 @@ namespace QSocial.Data
                     QEventExecutor.ExecuteInUpdate(() =>
                     {
                         Debug.LogError("Error to push data " + task.Exception);
+                        OnFalure?.Invoke(task.Exception);
                     });
 
                     return;
@@ -117,12 +110,33 @@ namespace QSocial.Data
                 QEventExecutor.ExecuteInUpdate(() =>
                 {
                     Debug.Log("Push complete!!");
-                    OnPushUserData?.Invoke();
+                    OnComplete?.Invoke();
                 });
             });
         }
 
-        public void RegisterNickname(string nickname,string uid)
+        public void NicknameValid(string nickname , System.Action<bool> Result , 
+            System.Action<System.Exception> OnFailure = null)
+        {
+            DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(UsersNodePath);
+
+            _ref.OrderByChild("username").EqualTo(nickname).GetValueAsync().ContinueWith( task =>
+           {
+               if (task.IsFaulted || task.IsCanceled)
+               {
+                   QEventExecutor.ExecuteInUpdate(() =>
+                   {
+                       Debug.LogError("Error fetching usernames");
+                       OnFailure?.Invoke(task.Exception);
+                   });
+                   return;
+               }
+               Result.Invoke(task.Result.ChildrenCount == 0);
+           });
+        }
+
+        public void RegisterNickname(string nickname,string uid , System.Action OnComplete = null , 
+            System.Action<System.Exception> OnFailure = null)
         {
             DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(UsersNodePath).Child(uid);
             Dictionary<string, object> m_update = new Dictionary<string, object>();
@@ -132,21 +146,20 @@ namespace QSocial.Data
             {
                 if (task.IsFaulted || task.IsCanceled)
                 {
-                    QEventExecutor.ExecuteInUpdate(() => Debug.LogError("Update fail " + task.Exception));
+                    QEventExecutor.ExecuteInUpdate(() =>
+                    {
+                        Debug.LogError("Update fail " + task.Exception);
+                        OnFailure?.Invoke(task.Exception);
+                    });
                     return;
                 }
-                QEventExecutor.ExecuteInUpdate(() => Debug.Log("Username registered!"));
+
+                QEventExecutor.ExecuteInUpdate(() =>
+                {
+                    Debug.Log("Username registered!");
+                    OnComplete?.Invoke();
+                });
             });
         }
-
-        private void Update()
-        {
-            if (_userPlayers.Count > 0)
-            {
-                UserPlayer user = _userPlayers.Dequeue();
-                OnUserPlayerRecivedData?.Invoke(user);
-            }
-        }
-
     }
 }
