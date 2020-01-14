@@ -5,13 +5,21 @@ namespace QSocial.Data.Users
     [System.Serializable]
     public class UserPlayer
     {
+        public string username;
         public string userid;
         public string[] friends;
 
-        public UserPlayer(string Uid, string[] FriendlistsIds)
+        public UserPlayer(string Userid, string[] Friends)
         {
-            userid = Uid;
-            friends = FriendlistsIds;
+            userid = Userid;
+            friends = Friends;
+        }
+
+        public UserPlayer (string Username, string Userid, string[] Friends)
+        {
+            username = Username;
+            userid = Userid;
+            friends = Friends;
         }
 
         public override string ToString()

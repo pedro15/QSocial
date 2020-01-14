@@ -5,6 +5,7 @@ using Firebase.Database;
 using QSocial.Utility;
 using QSocial.Utility.SimpleJSON;
 using QSocial.Data.Users;
+using QSocial.Auth;
 
 namespace QSocial.Data
 {
@@ -160,6 +161,54 @@ namespace QSocial.Data
                     OnComplete?.Invoke();
                 });
             });
+        }
+
+        public void GetCurrentUserData(System.Action<string> Response, System.Action<System.Exception> OnFailure = null)
+        {
+            if (AuthManager.Instance.IsAuthenticated)
+            {
+                string uid = AuthManager.Instance.auth.CurrentUser.UserId;
+                DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(UsersNodePath).Child(uid)
+                    .Child("userdata");
+
+                _ref.GetValueAsync().ContinueWith(task =>
+                {
+                    if (task.IsFaulted|| task.IsCanceled)
+                    {
+                        QEventExecutor.ExecuteInUpdate(() => OnFailure?.Invoke(task.Exception));
+                        return;
+                    }
+                    QEventExecutor.ExecuteInUpdate( () => Response.Invoke(task.Result.GetRawJsonValue()));
+                });
+            }else
+            {
+                Debug.LogError("[QDataManager:: GetCurrentUserData] User is not autenticated!");
+            }
+        }
+
+        public void SetCurrentUserData(string RawJSON , System.Action OnComplete = null, 
+            System.Action<System.Exception> OnFailure = null )
+        {
+            if (AuthManager.Instance.IsAuthenticated)
+            {
+                string uid = AuthManager.Instance.auth.CurrentUser.UserId;
+                DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(UsersNodePath).Child(uid)
+                    .Child("userdata");
+
+                _ref.SetRawJsonValueAsync(RawJSON).ContinueWith(task =>
+                {
+                    if (task.IsFaulted || task.IsCanceled)
+                    {
+                        QEventExecutor.ExecuteInUpdate(() => OnFailure?.Invoke(task.Exception));
+                        return;
+                    }
+                    QEventExecutor.ExecuteInUpdate(() => OnComplete?.Invoke());
+                });
+           
+            }else
+            {
+                Debug.LogError("[QDataManager:: SetCurrentUserData] User is not autenticated!");
+            }
         }
     }
 }
