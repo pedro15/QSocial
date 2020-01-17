@@ -329,7 +329,9 @@ namespace QSocial.Auth
                 checkusername:
                     bool failed = false;
                     bool checkusercompleted = false;
-                    
+
+                    Debug.Log("USER ID: " + selectedMethod.ResultUserId);
+
                    QDataManager.Instance.UserExists(selectedMethod.ResultUserId, (bool exists) =>
                    {
                        Debug.Log("[AuthManager] User check complete, user exists: " + exists);
