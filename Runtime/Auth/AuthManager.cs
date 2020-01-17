@@ -175,13 +175,17 @@ namespace QSocial.Auth
 
                     if (a_exception != null)
                     {
-                        Debug.LogError("[AuthManager] Execution of AsyncModule got error " + a_exception);
+                        Debug.LogWarning("[AuthManager] Execution of AsyncModule got error " + a_exception);
                         retrys++;
                         if(retrys < MaximunErrorRetrys)
                         {
                             Debug.LogWarning("[AuthManager] Retrying... " + retrys);
                             yield return new WaitForSeconds(0.5f);
                             goto moduleprocess;
+                        }else
+                        {
+                            Debug.LogError("Maximun retrys reached, continue to next module");
+                            continue;
                         }
                     }
                 }
