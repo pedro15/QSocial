@@ -90,6 +90,37 @@ namespace QSocial.Data
             });
         }
 
+        public void UsernameConfigured(string uid , System.Action<bool> Result , 
+            System.Action<System.Exception> OnFailure = null)
+        {
+            DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(UsersNodePath).Child(uid);
+            _ref.GetValueAsync().ContinueWith(task =>
+            {
+                if (task.IsFaulted || task.IsCanceled)
+                {
+                    QEventExecutor.ExecuteInUpdate(() => OnFailure?.Invoke(task.Exception));
+                    return;
+                }
+
+                QEventExecutor.ExecuteInUpdate(() =>
+                {
+                    string rawdata = task.Result.GetRawJsonValue();
+
+                    if (string.IsNullOrEmpty(rawdata))
+                    {
+                        OnFailure?.Invoke(new System.Exception("No user data found!"));
+                        return;
+                    }
+
+                    Debug.Log(rawdata);
+                    JSONNode root = JSON.Parse(rawdata);
+
+                    Result.Invoke(!string.IsNullOrEmpty(root["username"].Value));
+                });
+
+            });
+        }
+
         public void RegisterPlayerToDatabase(UserPlayer player , System.Action OnComplete = null , 
             System.Action<System.Exception> OnFalure = null)
         {

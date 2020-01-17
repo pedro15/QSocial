@@ -21,6 +21,10 @@ namespace QSocial.Auth
 
         public static event _onAuthCompleted OnAuthCompleted;
 
+        public delegate void _onAuthCancelled();
+
+        public static event _onAuthCancelled OnAuthCancelled;
+
         public delegate void _onAuthFail(System.Exception ex);
 
         public static event _onAuthFail OnAuthFail;
@@ -72,10 +76,14 @@ namespace QSocial.Auth
 
         private AuthModule[] AuthModules = default;
 
+        public bool AuthRunning { get; private set; } = false;
+
         private bool ModulesRunning = false;
-        private bool AuthRunning = false;
+
         private bool WasrequestedbyGuest = false;
+        private bool IsGuestRequest = false;
         private bool ExitRequest = false;
+        private bool WantsCheckLogin = false;
         private float ExitTime = 0f;
 
         internal void CompleteProfile()
@@ -95,13 +103,13 @@ namespace QSocial.Auth
             
             ExitBackground.onClick.AddListener(() => RequestExit());
 
+            emailMethod.Init(this);
+            anonymousMethod.Init(this);
+
             SelectionMenu.OnInit(this);
             SetupProfile.OnInit(this);
 
-            AuthModules = new AuthModule[] { SelectionMenu, SetupProfile };
-
-            emailMethod.Init(this);
-            anonymousMethod.Init(this);
+            AuthModules = new AuthModule[] { SelectionMenu , SetupProfile };
         }
 
         private void Update()
@@ -109,6 +117,15 @@ namespace QSocial.Auth
             if (AuthRunning && selectedMethod != null)
             {
                 selectedMethod.OnUpdate();
+            }
+
+            if (WantsCheckLogin)
+            {
+                if (!ModulesRunning)
+                {
+                    StartCoroutine(I_CheckLogin(IsGuestRequest));
+                    WantsCheckLogin = false;
+                }
             }
         }
 
@@ -128,8 +145,8 @@ namespace QSocial.Auth
 
         public void RequestLogin(bool Guestvalid = false)
         {
-            if (!ModulesRunning)
-                StartCoroutine(I_CheckLogin(Guestvalid));
+            IsGuestRequest = Guestvalid;
+            WantsCheckLogin = true;
         }
 
         private IEnumerator I_CheckLogin(bool GuestRequest = false)
@@ -139,13 +156,37 @@ namespace QSocial.Auth
             WasrequestedbyGuest = GuestRequest;
             ValidateMethods();
             float time_enter = Time.time;
-            FirebaseUser usr = auth.CurrentUser;
             for (int i = 0; i < AuthModules.Length; i++)
             {
-                Debug.Log("ID: " + i + " " + AuthModules[i].GetType());
+                Debug.Log("[AuthManager] Module (" + i + ") -> " + AuthModules[i].GetType());
                 AuthModule module = AuthModules[i];
+                int retrys = 0;
+                
+                moduleprocess:
+                module.OnEnter();
 
-                if (module.IsValid(GuestRequest, usr))
+                IAsyncModule asyncModule = module as IAsyncModule;
+
+                if (asyncModule != null)
+                {
+                    yield return new WaitUntil(() => !asyncModule.IsLoading(GuestRequest , auth.CurrentUser));
+
+                    System.Exception a_exception = asyncModule.GetException();
+
+                    if (a_exception != null)
+                    {
+                        Debug.LogError("[AuthManager] Execution of AsyncModule got error " + a_exception);
+                        retrys++;
+                        if(retrys < MaximunErrorRetrys)
+                        {
+                            Debug.LogWarning("[AuthManager] Retrying... " + retrys);
+                            yield return new WaitForSeconds(0.5f);
+                            goto moduleprocess;
+                        }
+                    }
+                }
+
+                if (module.IsValid(GuestRequest, auth.CurrentUser))
                 {
                     hasvalidated = true;
                     module.Execute(this);
@@ -179,7 +220,6 @@ namespace QSocial.Auth
                     });
                     module.OnFinish(this, ExitRequest);
                     ExitRequest = false;
-
                 }
 
                 if (!hasvalidated && i == AuthModules.Length - 1)
@@ -188,6 +228,8 @@ namespace QSocial.Auth
                 }
 
             }
+
+            Debug.Log("Check login finished");
             ModulesRunning = false;
             yield return 0;
         }
@@ -266,6 +308,7 @@ namespace QSocial.Auth
                     if (customUI != null && tres == AuthResult.None && goback)
                     {
                         customUI?.HideUI();
+                        OnAuthCancelled?.Invoke();
                         RequestLogin(WasrequestedbyGuest);
                         break;
                     }
@@ -344,6 +387,7 @@ namespace QSocial.Auth
                 Debug.LogError("[AuthManager] Method not found: " + methodid);
             }
 
+            Debug.Log("Auth execution Finished!");
             AuthRunning = false;
             selectedMethod = null;
             yield return 0;
