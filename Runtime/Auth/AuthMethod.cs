@@ -16,6 +16,8 @@ namespace QSocial.Auth
 
         public abstract string Id { get; }
 
+        public abstract string ResultUserId { get; }
+
         private bool Initialized = false;
 
         public void Init(AuthManager manager)

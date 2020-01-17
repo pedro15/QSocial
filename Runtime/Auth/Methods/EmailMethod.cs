@@ -2,6 +2,7 @@
 using UnityEngine.UI;
 using TMPro;
 using Firebase.Auth;
+using Firebase;
 
 using QSocial.Data;
 using QSocial.Data.Users;
@@ -64,9 +65,13 @@ namespace QSocial.Auth.Methods
 
         private bool BackResult = false;
 
+        private string uid;
+
         private System.Exception ex;
 
         public override string Id => "Auth-Email";
+
+        public override string ResultUserId => uid; 
 
         public override void OnEnter()
         {
@@ -174,11 +179,8 @@ namespace QSocial.Auth.Methods
                                    }
 
                                    Debug.Log("Create user with email completed !");
-                                   
-                                   QDataManager.Instance.RegisterPlayerToDatabase(new UserPlayer(task.Result.UserId,
-                                       new string[] { }));
 
-
+                                   uid = task.Result.UserId;
                                    result = AuthResult.Completed;
 
                                });
@@ -200,8 +202,9 @@ namespace QSocial.Auth.Methods
                  {
                      if (task.IsFaulted || task.IsCanceled)
                      {
-                         Debug.LogError("Sing in with email failed " + task.Exception?.Message);
-                         ex = task.Exception;
+                         ex = AuthManager.GetFirebaseException(task.Exception);
+
+                         Debug.LogError("Sing in with email failed " + ex?.Message +  " error code:  " + ((FirebaseException)ex).ErrorCode);
                          result = AuthResult.Failure;
                          return;
                      }

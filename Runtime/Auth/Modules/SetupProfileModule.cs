@@ -2,8 +2,8 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using QWordFilter = QSocial.Utility.QWordFilter;
 using QSocial.Data;
+using QSocial.Utility;
 
 namespace QSocial.Auth.Modules
 {
@@ -49,6 +49,8 @@ namespace QSocial.Auth.Modules
                                     isFinished = false;
                                     return;
                                 }
+
+                                QEventExecutor.ExecuteInUpdate(() => AuthManager.Instance.CompleteProfile());
                                 Debug.Log("Setup profile completed !!");
                                 isFinished = true;
                             });
@@ -70,6 +72,7 @@ namespace QSocial.Auth.Modules
         {
             FormContainer.SetActive(false);
             manager.DisplayLayout(false);
+            isFinished = false;
         }
 
         public override void Execute(AuthManager manager)
@@ -88,5 +91,6 @@ namespace QSocial.Auth.Modules
         {
             return (user != null && string.IsNullOrEmpty(user.DisplayName));
         }
+
     }
 }

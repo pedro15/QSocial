@@ -78,15 +78,15 @@ namespace QSocial.Data
                             friends[i] = friends_Node[i].Value;
                         }
 
-                        user = new UserPlayer(uid,friends);
+                        user = new UserPlayer(root["username"].Value,uid,friends);
 
                         OnComplete?.Invoke(user);
-                    }
-                    catch
-                    {
-                        OnFailure?.Invoke(new System.Exception("Invalid JSON from user request"));
-                    }
-                });
+                }
+                 catch (System.Exception ex)
+                {
+                    OnFailure?.Invoke(new System.Exception("Invalid JSON from user request " + ex));
+                }
+            });
             });
         }
 
@@ -113,6 +113,28 @@ namespace QSocial.Data
                     Debug.Log("Push complete!!");
                     OnComplete?.Invoke();
                 });
+            });
+        }
+
+        public void UserExists(string uid, System.Action<bool> Result , System.Action<System.Exception> OnFailure = null)
+        {
+
+            DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(UsersNodePath);
+
+            _ref.OrderByChild("userid").EqualTo(uid).GetValueAsync().ContinueWith(task =>
+            {
+                if (task.IsFaulted || task.IsCanceled)
+                {
+                    QEventExecutor.ExecuteInUpdate(() =>
+                    {
+                        Debug.LogError("Error fetching usernames to check");
+                        OnFailure?.Invoke(task.Exception);
+                    });
+
+                    return;
+                }
+
+                QEventExecutor.ExecuteInUpdate(() => Result.Invoke(task.Result.ChildrenCount > 0));
             });
         }
 
@@ -162,7 +184,7 @@ namespace QSocial.Data
                 });
             });
         }
-
+        
         public void GetCurrentUserData(System.Action<string> Response, System.Action<System.Exception> OnFailure = null)
         {
             if (AuthManager.Instance.IsAuthenticated)

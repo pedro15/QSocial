@@ -11,6 +11,10 @@ namespace QSocial.Auth.Methods
 
         private System.Exception ex;
 
+        private string uid = default;
+
+        public override string ResultUserId => uid;
+
         public override System.Exception GetException() => ex;
 
         public override void OnEnter()
@@ -28,6 +32,7 @@ namespace QSocial.Auth.Methods
                 }
 
                 Debug.Log("Auth Anonymous Completed !");
+                uid = task.Result.UserId;
                 tres = AuthResult.Completed;
 
                 return;

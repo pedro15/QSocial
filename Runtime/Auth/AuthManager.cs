@@ -5,9 +5,12 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.UI;
 
+using Firebase;
 using Firebase.Auth;
 using QSocial.Auth.Methods;
 using QSocial.Auth.Modules;
+using QSocial.Data;
+using QSocial.Data.Users;
 
 namespace QSocial.Auth
 {
@@ -22,6 +25,9 @@ namespace QSocial.Auth
 
         public static event _onAuthFail OnAuthFail;
 
+        public delegate void _onProfileCompleted();
+
+        public static event _onProfileCompleted OnProfileCompleted;
 
         private static AuthManager _instance = null;
 
@@ -40,6 +46,8 @@ namespace QSocial.Auth
         private GameObject BaseLayout = default;
         [SerializeField]
         private Button ExitBackground = default;
+        [SerializeField]
+        private int MaximunErrorRetrys = 5;
 
         [Header("Modules")]
         [SerializeField]
@@ -56,9 +64,9 @@ namespace QSocial.Auth
 
         public bool IsAuthenticated { get { return auth.CurrentUser != null; } }
 
-        private Dictionary<string, AuthMethod> methodsdb;
+        private Dictionary<string, AuthMethod> methodsdb = new Dictionary<string, AuthMethod>();
 
-        private Dictionary<string, AuthModule> modulesdb;
+        private Dictionary<string, AuthModule> modulesdb = new Dictionary<string, AuthModule>();
 
         private AuthMethod selectedMethod = null;
 
@@ -70,6 +78,12 @@ namespace QSocial.Auth
         private bool ExitRequest = false;
         private float ExitTime = 0f;
 
+        internal void CompleteProfile()
+        {
+            Debug.Log("Profile Completed!!!");
+            OnProfileCompleted?.Invoke();
+        }
+
         private void Start()
         {
             if (Instance != null && Instance != this)
@@ -78,10 +92,7 @@ namespace QSocial.Auth
                 return;
             }
             auth = FirebaseAuth.DefaultInstance;
-
-            methodsdb = new Dictionary<string, AuthMethod>();
-            modulesdb = new Dictionary<string, AuthModule>();
-
+            
             ExitBackground.onClick.AddListener(() => RequestExit());
 
             SelectionMenu.OnInit(this);
@@ -128,10 +139,13 @@ namespace QSocial.Auth
             WasrequestedbyGuest = GuestRequest;
             ValidateMethods();
             float time_enter = Time.time;
+            FirebaseUser usr = auth.CurrentUser;
             for (int i = 0; i < AuthModules.Length; i++)
             {
+                Debug.Log("ID: " + i + " " + AuthModules[i].GetType());
                 AuthModule module = AuthModules[i];
-                if (module.IsValid(GuestRequest, auth.CurrentUser))
+
+                if (module.IsValid(GuestRequest, usr))
                 {
                     hasvalidated = true;
                     module.Execute(this);
@@ -240,7 +254,7 @@ namespace QSocial.Auth
 
                 IAuthCustomNavigation customNavigation = selectedMethod as IAuthCustomNavigation;
                 AuthResult tres = AuthResult.None;
-
+                
             process:
                 selectedMethod.OnEnter();
 
@@ -267,6 +281,49 @@ namespace QSocial.Auth
                         selectedMethod.OnFinish();
                     }
 
+                    int retrys = 0;
+
+                checkusername:
+                    bool failed = false;
+                    bool checkusercompleted = false;
+                    
+                   QDataManager.Instance.UserExists(selectedMethod.ResultUserId, (bool exists) =>
+                   {
+                       Debug.Log("[AuthManager] User check complete, user exists: " + exists);
+                       if (!exists)
+                       {
+                           Debug.Log("[AuthManager] user does not exists, uploading to database...");
+                           QDataManager.Instance.RegisterPlayerToDatabase(new UserPlayer(
+                               selectedMethod.ResultUserId, new string[0]) , () =>
+                               {
+                                   Debug.Log("[Auth Manager] user upload to database completed");
+                                   checkusercompleted = true;  
+                               } , (System.Exception ex) =>
+                               {
+                                   Debug.LogError("[AuthManager] Failed to register user to database " + ex);
+                                   failed = true;
+                               });
+                       }else
+                       {
+                           Debug.Log("[AuthManager] user exists, continue without changes");
+                           checkusercompleted = true;
+                       }
+                   }, (System.Exception ex) =>
+                   {
+                       Debug.LogError("[AuthManager] Failed to check username " + ex);
+                       failed = true;
+                   });
+
+                    if (failed && retrys < MaximunErrorRetrys)
+                    {
+                        retrys++;
+                        Debug.LogError("An error ocurred, retrying... " + retrys);
+                        yield return new WaitForSeconds(1f);
+                        goto checkusername;
+                    }
+
+                    yield return new WaitUntil(() => checkusercompleted);
+
                     customUI?.HideUI();
 
                     OnAuthCompleted?.Invoke();
@@ -276,6 +333,7 @@ namespace QSocial.Auth
                 else if (tres == AuthResult.Failure)
                 {
                     OnAuthFail?.Invoke(selectedMethod.GetException());
+                    Debug.LogError("[AuthManager] Auth Fail! " + selectedMethod.GetException());
                     selectedMethod.OnFinish();
                     tres = AuthResult.None;
                     goto process;
@@ -291,5 +349,9 @@ namespace QSocial.Auth
             yield return 0;
         }
 
+        public static FirebaseException GetFirebaseException(System.Exception ex)
+        {
+            return ex?.InnerException.GetBaseException() as FirebaseException;
+        }
     }
 }
