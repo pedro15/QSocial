@@ -4,7 +4,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using QSocial.Data;
 using QSocial.Utility;
-using UnityEngine.Events;
 
 namespace QSocial.Auth.Modules
 {
@@ -17,8 +16,6 @@ namespace QSocial.Auth.Modules
         private TMP_InputField textUsername = default;
         [SerializeField]
         private Button SetupButton = default;
-        [SerializeField]
-        public UnityEvent OnFail = default;
 
         private bool isFinished = false;
         private bool isLoading = false;

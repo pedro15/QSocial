@@ -1,17 +1,15 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using Firebase.Auth;
-using Firebase;
 
-using QSocial.Data;
-using QSocial.Data.Users;
+using Firebase;
+using Firebase.Auth;
 using QSocial.Utility;
 
 namespace QSocial.Auth.Methods
 {
-    [HasAnonymousConversion,System.Serializable]
-    public class EmailMethod : AuthMethod,IAuthCustomUI,IAuthCustomNavigation
+    [HasAnonymousConversion, System.Serializable]
+    public class EmailMethod : AuthMethod, IAuthCustomUI, IAuthCustomNavigation
     {
         enum emailNavigation
         {
@@ -71,7 +69,7 @@ namespace QSocial.Auth.Methods
 
         public override string Id => "Auth-Email";
 
-        public override string ResultUserId => uid; 
+        public override string ResultUserId => uid;
 
         public override void OnEnter()
         {
@@ -103,8 +101,7 @@ namespace QSocial.Auth.Methods
             RecoverPasswordButton.onClick.AddListener(() =>
             {
                 result = AuthResult.Running;
-                Debug.Log("Recover email password");
-
+                
                 if (!string.IsNullOrEmpty(Email_SingIn.text))
                     Email_Recoverpassword.text = Email_SingIn.text;
 
@@ -113,13 +110,10 @@ namespace QSocial.Auth.Methods
                 {
                     if (task.IsFaulted || task.IsCanceled)
                     {
-                        Debug.Log("Fail to recover email!");
-                        ex = task.Exception;
+                        ex = AuthManager.GetFirebaseException(task.Exception);
                         result = AuthResult.Failure;
                         return;
                     }
-
-                    Debug.Log("Recover password sent!");
 
                     QEventExecutor.ExecuteInUpdate(() =>
                    {
@@ -134,9 +128,8 @@ namespace QSocial.Auth.Methods
             RegisterButton.onClick.AddListener(() =>
             {
                 result = AuthResult.Running;
-                Debug.Log("Create user with email!");
-                if (!string.IsNullOrEmpty(Password_Register.text) && 
-                string.Equals(Password_Register.text , Password_Register_c.text))
+                if (!string.IsNullOrEmpty(Password_Register.text) &&
+                string.Equals(Password_Register.text, Password_Register_c.text))
                 {
 
                     if (AuthManager.Instance.IsAuthenticated)
@@ -151,8 +144,8 @@ namespace QSocial.Auth.Methods
                             {
                                 if (task.IsFaulted || task.IsCanceled)
                                 {
-                                    Debug.LogError("Fail to link account! " + task.Exception?.ToString());
-                                    ex = task.Exception;
+                                    ex = AuthManager.GetFirebaseException(task.Exception);
+                                    Debug.LogError("Fail to link account! " + ex);
                                     result = AuthResult.Failure;
                                     return;
                                 }
@@ -160,42 +153,42 @@ namespace QSocial.Auth.Methods
                                 Debug.Log("Link account completed !");
                                 result = AuthResult.Completed;
                             });
-                        }else
+                        }
+                        else
                         {
                             Debug.LogError("User is not Anonymouus!");
                             result = AuthResult.Failure;
                         }
-                    }else
+                    }
+                    else
                     {
                         AuthManager.Instance.auth.CreateUserWithEmailAndPasswordAsync(Email_Register.text,
                                Password_Register.text).ContinueWith(task =>
                                {
                                    if (task.IsFaulted || task.IsCanceled)
                                    {
-                                       Debug.LogError("Create user with email failed " + task.Exception?.Message);
-                                       ex = task.Exception;
+                                       ex = AuthManager.GetFirebaseException(task.Exception);
                                        result = AuthResult.Failure;
                                        return;
                                    }
 
-                                   Debug.Log("Create user with email completed !");
+                                   Debug.Log("[Email Method] Create user with email completed !");
 
                                    uid = task.Result.UserId;
                                    result = AuthResult.Completed;
 
                                });
                     }
-                }else
+                }
+                else
                 {
-                    ex = new System.Exception("Passwords must match!");
+                    ex = new System.ArgumentException("Passwords must match!");
                     result = AuthResult.Failure;
-                    Debug.LogWarning("Passwords must match !");
                 }
             });
 
             SingInButton.onClick.AddListener(() =>
             {
-                Debug.Log("Sing in with email");
                 result = AuthResult.Running;
                 AuthManager.Instance.auth.SignInWithEmailAndPasswordAsync(Email_SingIn.text, Password_SingIn.text)
                  .ContinueWith(task =>
@@ -203,23 +196,16 @@ namespace QSocial.Auth.Methods
                      if (task.IsFaulted || task.IsCanceled)
                      {
                          ex = AuthManager.GetFirebaseException(task.Exception);
-
-                         Debug.LogError("Sing in with email failed " + ex?.Message +  " error code:  " + ((FirebaseException)ex).ErrorCode);
                          result = AuthResult.Failure;
                          return;
                      }
-
-
-                     Debug.Log("Sing in with email completed!");
                      result = AuthResult.Completed;
-
                  });
             });
         }
 
         private void UpdateLayout()
         {
-            Debug.Log($"UpdateLayout :: { nav }");
             form_Register.SetActive(nav == emailNavigation.RegisterForm);
             form_SingIn.SetActive(nav == emailNavigation.LoginForm);
             form_ForgotPassword.SetActive(nav == emailNavigation.ForgotPassword);
@@ -285,7 +271,8 @@ namespace QSocial.Auth.Methods
                     UpdateLayout();
                     BackResult = (nav != emailNavigation.None) ? false : true;
                 }
-            }else if (Input.GetKeyUp(KeyCode.Escape))
+            }
+            else if (Input.GetKeyUp(KeyCode.Escape))
             {
                 BackResult = false;
             }

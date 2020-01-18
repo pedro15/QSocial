@@ -88,7 +88,6 @@ namespace QSocial.Auth
 
         internal void CompleteProfile()
         {
-            Debug.Log("Profile Completed!!!");
             OnProfileCompleted?.Invoke();
         }
 
