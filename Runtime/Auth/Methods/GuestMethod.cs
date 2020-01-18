@@ -1,6 +1,4 @@
-﻿using UnityEngine;
-
-namespace QSocial.Auth.Methods
+﻿namespace QSocial.Auth.Methods
 {
     [System.Serializable]
     public class GuestMethod : AuthMethod
@@ -19,19 +17,17 @@ namespace QSocial.Auth.Methods
 
         public override void OnEnter()
         {
-            Debug.Log("GuestMethod!!");
+            uid = string.Empty;
             tres = AuthResult.Running;
             AuthManager.Instance.auth.SignInAnonymouslyAsync().ContinueWith(task =>
             {
                 if (task.IsCanceled || task.IsFaulted)
                 {
-                    Debug.LogError("Auth Anonymous Failure!");
-                    ex = task.Exception;
+                    ex = AuthManager.GetFirebaseException(task.Exception);
                     tres = AuthResult.Failure;
                     return;
                 }
 
-                Debug.Log("Auth Anonymous Completed !");
                 uid = task.Result.UserId;
                 tres = AuthResult.Completed;
 
