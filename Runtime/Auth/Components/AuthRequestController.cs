@@ -8,6 +8,7 @@ namespace QSocial.Auth.Components
         private void Start()
         {
             AuthManager.Instance.auth.StateChanged += Auth_StateChanged;
+
             DoRequest();
         }
 
@@ -24,8 +25,7 @@ namespace QSocial.Auth.Components
 
         private void DoRequest()
         {
-            if (!AuthManager.Instance.IsAuthenticated)
-                AuthManager.Instance.RequestLogin();
+             AuthManager.Instance.RequestLogin(false , true);
         }
     }
 }

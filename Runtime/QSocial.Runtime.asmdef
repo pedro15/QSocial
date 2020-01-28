@@ -2,9 +2,9 @@
     "name": "QSocial.Runtime",
     "references": [
         "UniToolkit-Core",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "UDialogs"
     ],
-    "optionalUnityReferences": [],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
