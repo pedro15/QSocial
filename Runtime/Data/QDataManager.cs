@@ -66,8 +66,7 @@ namespace QSocial.Data
                     try
                     {
                         string json = task.Result.GetRawJsonValue();
-                        Debug.Log("Recived JSON: " + json);
-
+                        
                         var root = JSON.Parse(json);
 
                         JSONNode friends_Node = root["friends"];
@@ -132,7 +131,7 @@ namespace QSocial.Data
                 {
                     QEventExecutor.ExecuteInUpdate(() =>
                     {
-                        Debug.LogError("Error to push data " + task.Exception);
+                        Debug.LogError("[QDataManager] Error at register user to database " + task.Exception);
                         OnFalure?.Invoke(task.Exception);
                     });
 
@@ -141,7 +140,7 @@ namespace QSocial.Data
 
                 QEventExecutor.ExecuteInUpdate(() =>
                 {
-                    Debug.Log("Push complete!!");
+                    Debug.Log("[QDataManager] Register to database Completed");
                     OnComplete?.Invoke();
                 });
             });
@@ -158,7 +157,7 @@ namespace QSocial.Data
                 {
                     QEventExecutor.ExecuteInUpdate(() =>
                     {
-                        Debug.LogError("Error fetching usernames to check");
+                        Debug.LogError("[QDataManager] Error fetching usernames to check");
                         OnFailure?.Invoke(task.Exception);
                     });
 
@@ -180,7 +179,7 @@ namespace QSocial.Data
                {
                    QEventExecutor.ExecuteInUpdate(() =>
                    {
-                       Debug.LogError("Error fetching usernames");
+                       Debug.LogError("[QDataManager] Error fetching usernames");
                        OnFailure?.Invoke(task.Exception);
                    });
                    return;
@@ -202,7 +201,7 @@ namespace QSocial.Data
                 {
                     QEventExecutor.ExecuteInUpdate(() =>
                     {
-                        Debug.LogError("Update fail " + task.Exception);
+                        Debug.LogError("[QDataManager] Update fail " + task.Exception);
                         OnFailure?.Invoke(task.Exception);
                     });
                     return;
@@ -210,7 +209,7 @@ namespace QSocial.Data
 
                 QEventExecutor.ExecuteInUpdate(() =>
                 {
-                    Debug.Log("Username registered!");
+                    Debug.Log("[QDataManager] Nickname register completed!");
                     OnComplete?.Invoke();
                 });
             });
@@ -260,7 +259,7 @@ namespace QSocial.Data
            
             }else
             {
-                Debug.LogError("[QDataManager:: SetCurrentUserData] User is not autenticated!");
+                Debug.LogError("[QDataManager] User is not autenticated!");
             }
         }
     }

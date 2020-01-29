@@ -92,16 +92,16 @@ namespace QSocial.Auth
         internal bool UserChecking { get; private set; } = false;
 
         private bool ModulesRunning = false;
-        
+        private bool dbcheck = false;
+
         private bool KeepRequest = false;
         private bool WasrequestedbyGuest = false;
         private bool IsGuestRequest = false;
         private bool ExitRequest = false;
         private bool WantsCheckLogin = false;
+        private bool processStarted = false;
 
         private float ExitTime = 0f;
-
-        
 
         // UNITY EVENTS ====
 
@@ -140,6 +140,8 @@ namespace QSocial.Auth
 
                 if (!KeepRequest) WantsCheckLogin = false;
             }
+
+            Debug.Log(WantsCheckLogin);
         }
 
         // INTERNAL API ========
@@ -158,16 +160,22 @@ namespace QSocial.Auth
 
         private void StartProcess()
         {
+            if (processStarted) return;
+
             if (OnProcessBegin != null)
                 OnProcessBegin.Invoke();
+
+            processStarted = true;
         }
 
         private void FinishProcess(System.Exception ex)
         {
             if (OnProcessFinish != null)
                 OnProcessFinish.Invoke(ex);
-        }
 
+            processStarted = false;
+        }
+        
         private void SetDefaultAuthModules()
         {
             AuthModules = new AuthModule[] { SelectionMenu, SetupProfile };
@@ -182,9 +190,10 @@ namespace QSocial.Auth
             }
         }
 
-        public void RequestLogin(bool Guestvalid = false, bool KeepRequestUntilAviable = false)
+        public void RequestLogin(bool Guestvalid = false, bool checkuserindb = true, bool KeepRequestUntilAviable = false)
         {
             IsGuestRequest = Guestvalid;
+            dbcheck = checkuserindb;
             KeepRequest = KeepRequestUntilAviable;
             WantsCheckLogin = true;
         }
@@ -259,7 +268,6 @@ namespace QSocial.Auth
         {
             int retrys = 0;
         checkuserdb:
-            StartProcess();
 
             UserChecking = true;
             int state = -1;
@@ -308,8 +316,6 @@ namespace QSocial.Auth
             }
 
             UserChecking = false;
-
-            FinishProcess(eex);
         }
 
         // Check User Login
@@ -323,23 +329,25 @@ namespace QSocial.Auth
             ValidateMethods();
             float time_enter = Time.time;
 
-            if (auth.CurrentUser != null )
+            if (auth.CurrentUser != null && dbcheck)
             {
+                StartProcess();
+
                 CheckUserDB(auth.CurrentUser.UserId);
 
                 Debug.Log("[AuthManager] Check user on database (login)");
 
                 yield return new WaitUntil(() => !UserChecking);
+
+                FinishProcess(null);
             }
 
-            Debug.Log("Modules count: " + AuthModules.Length);
-
+            mainmenu:
+            bool gomainmenu = false;
             for (int i = 0; i < AuthModules.Length; i++)
             {
                 AuthModule module = AuthModules[i];
                 int retrys = 0;
-
-                Debug.Log("Module:: " + module);
 
             moduleprocess:
                 module.OnEnter();
@@ -348,15 +356,14 @@ namespace QSocial.Auth
 
                 if (asyncModule != null)
                 {
-                    StartProcess();
-
+                    //StartProcess();
+                    
                     yield return new WaitUntil(() => !asyncModule.IsLoading(GuestRequest, auth.CurrentUser));
 
                     System.Exception a_exception = asyncModule.GetException();
 
-                    if (OnProcessFinish != null)
-                        OnProcessFinish.Invoke((retrys < MaximunErrorRetrys) ? null : a_exception);
-
+                    //FinishProcess((retrys < MaximunErrorRetrys) ? null : a_exception);
+                    
                     if (a_exception != null)
                     {
                         Debug.LogWarning("[AuthManager] Execution of AsyncModule got error " + a_exception);
@@ -380,6 +387,7 @@ namespace QSocial.Auth
                 {
                     hasvalidated = true;
                     module.Execute(this);
+                    
                     yield return new WaitUntil(() =>
                     {
                         if (Input.GetKey(KeyCode.Escape) && Time.time - time_enter >= 0.15f)
@@ -392,6 +400,7 @@ namespace QSocial.Auth
                         {
                             if (IsAuthenticated)
                             {
+                                gomainmenu = true;
                                 return true;
                             }
                             else
@@ -408,16 +417,21 @@ namespace QSocial.Auth
 
                         return module.IsCompleted();
                     });
+
                     module.OnFinish(this, ExitRequest);
                     ExitRequest = false;
                 }
 
-                if (!hasvalidated && i == AuthModules.Length - 1)
+                if (i == AuthModules.Length - 1)
                 {
-                    DisplayLayout(false);
+                    if (!hasvalidated)
+                        DisplayLayout(false);
                 }
 
             }
+
+            if (gomainmenu)
+                goto mainmenu;
 
             Debug.Log("Check login finished");
             ModulesRunning = false;
@@ -441,6 +455,7 @@ namespace QSocial.Auth
 
                 selectedMethod.OnEnter();
                 if (OnAuthBegin != null) OnAuthBegin.Invoke();
+                bool processstarted = false;
 
                 do
                 {
@@ -455,9 +470,18 @@ namespace QSocial.Auth
                         break;
                     }
 
+                    Debug.Log(tres);
+
+                    if (tres == AuthResult.Running && !processstarted)
+                    {
+                       // StartProcess();
+                        processstarted = true;
+                    }
+
                     yield return new WaitForEndOfFrame();
 
                 } while (tres == AuthResult.None || tres == AuthResult.Running);
+
 
                 if (tres == AuthResult.Completed)
                 {
@@ -467,20 +491,25 @@ namespace QSocial.Auth
                     }
 
                     Debug.Log("[AuthManager] Check user in database");
+
+
                     CheckUserDB(selectedMethod.ResultUserId);
 
                     yield return new WaitUntil(() => !UserChecking);
+
+
 
                     customUI?.HideUI();
 
                     OnAuthCompleted?.Invoke();
 
-                    RequestLogin(WasrequestedbyGuest , true);
+                    RequestLogin(WasrequestedbyGuest, false , true);
                 }
                 else if (tres == AuthResult.Failure)
                 {
                     OnAuthFail?.Invoke(selectedMethod.GetException());
                     Debug.LogError("[AuthManager] Auth Fail! " + selectedMethod.GetException());
+                    FinishProcess(selectedMethod.GetException());
                     selectedMethod.OnFinish();
                     tres = AuthResult.None;
                     goto process;
@@ -492,10 +521,10 @@ namespace QSocial.Auth
             }
 
             Debug.Log("Auth execution Finished!");
+            FinishProcess(null);
             AuthRunning = false;
             selectedMethod = null;
             yield return 0;
         }
-
     }
 }

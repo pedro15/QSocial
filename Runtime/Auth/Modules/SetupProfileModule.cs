@@ -45,20 +45,27 @@ namespace QSocial.Auth.Modules
                 {
                     if (result)
                     {
-                        QDataManager.Instance.RegisterNickname(username, usr.UserId, () => {
+                        QDataManager.Instance.RegisterNickname(username, usr.UserId, () => 
+                        {
                             usr?.UpdateUserProfileAsync
                             (new UserProfile() { DisplayName = username }).ContinueWith(task =>
                             {
                                 if (task.IsCanceled || task.IsFaulted)
                                 {
-                                    Debug.Log("Setup Profile failure!!");
-                                    isFinished = false;
+                                    QEventExecutor.ExecuteInUpdate(() =>
+                                    {
+                                        Debug.Log("Setup Profile failure!!");
+                                        isFinished = false;
+                                    });
                                     return;
                                 }
 
-                                QEventExecutor.ExecuteInUpdate(() => AuthManager.Instance.CompleteProfile());
-                                Debug.Log("Setup profile completed !!");
-                                isFinished = true;
+                                QEventExecutor.ExecuteInUpdate(() => 
+                                {
+                                    AuthManager.Instance.CompleteProfile();
+                                    Debug.Log("Setup profile completed !!");
+                                    isFinished = true;
+                                });
                             });
                         },
                         (System.Exception ex) => Debug.LogError("An error ocurrer at register nickname " + ex));
