@@ -1,49 +1,42 @@
-﻿using Firebase.Auth;
+﻿using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine;
+using Firebase.Auth;
 
 namespace QSocial.Auth.Modules
 {
-    [System.Serializable]
-    internal class MenuModule : AuthModule
+    public class MenuModule : AuthModule
     {
+        private ProcessResult result = ProcessResult.None;
+
         [SerializeField]
-        private GameObject LayoutContainer = default;
+        private GameObject MenuLayout = default;
         [SerializeField]
         private Button[] MenuButtons = default;
 
-        private bool isFinished = false;
-
         public override void OnInit(AuthManager manager)
         {
-            foreach (Button btn in MenuButtons) btn?.onClick.AddListener(() => isFinished = true);
+            foreach (Button btn in MenuButtons)
+                btn.onClick.AddListener(() => result = ProcessResult.Completed);
         }
 
         public override void Execute(AuthManager manager)
         {
-            LayoutContainer.SetActive(true);
-            manager.DisplayLayout(true);
+            MenuLayout.SetActive(true);
         }
 
-        public override bool IsCompleted()
+        public override void OnFinish(AuthManager manager , bool Interrumpted)
         {
-            return isFinished;
+            MenuLayout.SetActive(false);
+        }
+
+        public override ProcessResult GetResult()
+        {
+            return result;
         }
 
         public override bool IsValid(bool GuestRequest, FirebaseUser user)
         {
-            return user == null || (GuestRequest && user.IsAnonymous);
-        }
-
-        public override void OnFinish(AuthManager manager, bool Interrupted)
-        {
-            if (Interrupted)
-            {
-                manager.DisplayLayout(false);
-            }
-            
-            LayoutContainer.SetActive(false);
-            isFinished = false;
+            return (user == null || (GuestRequest && user.IsAnonymous));
         }
 
         public override bool IsInterruptible()

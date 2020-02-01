@@ -3,7 +3,8 @@
     "references": [
         "UniToolkit-Core",
         "Unity.TextMeshPro",
-        "UDialogs"
+        "UDialogs",
+        "Command_FSM"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

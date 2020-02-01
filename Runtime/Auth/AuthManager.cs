@@ -1,50 +1,28 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
-
 using UnityEngine;
 using UnityEngine.UI;
 
-using Firebase;
 using Firebase.Auth;
-using QSocial.Auth.Methods;
-using QSocial.Auth.Modules;
+using CommandStateMachine;
 using QSocial.Data;
 using QSocial.Data.Users;
+using QSocial.Utility;
+using QSocial.Auth.Modules;
 
 namespace QSocial.Auth
 {
-    [System.Serializable,DefaultExecutionOrder(-50)]
     public class AuthManager : MonoBehaviour
     {
-        
-        public delegate void _OnProcessBegin();
+        public delegate void _OnAuthCancelled();
 
-        public static event _OnProcessBegin OnProcessBegin;
+        public static event _OnAuthCancelled OnAuthCancelled;
 
-        public delegate void _OnProcessFinish(System.Exception ex);
+        public delegate void _OnAuthCompleted();
 
-        public static event _OnProcessFinish OnProcessFinish;
+        public static event _OnAuthCompleted OnAuthCompleted;
 
-        public delegate void _onAuthBegin();
 
-        public static event _onAuthBegin OnAuthBegin;
-
-        public delegate void _onAuthCompleted();
-
-        public static event _onAuthCompleted OnAuthCompleted;
-
-        public delegate void _onAuthCancelled();
-
-        public static event _onAuthCancelled OnAuthCancelled;
-
-        public delegate void _onAuthFail(System.Exception ex);
-
-        public static event _onAuthFail OnAuthFail;
-
-        public delegate void _onProfileCompleted();
-
-        public static event _onProfileCompleted OnProfileCompleted;
 
         private static AuthManager _instance = null;
 
@@ -58,6 +36,24 @@ namespace QSocial.Auth
             }
         }
 
+        [System.Flags]
+        private enum AuthCheckState : int
+        {
+            None = 1,
+            MainMenu = 2,
+            AuthMethod = 4,
+            SetupProfile = 8
+        }
+
+        [System.Flags]
+        private enum AuthCheckCommand : int
+        {
+            GoBack = 1,
+            Next = 2
+        }
+
+        private QSocialLogger logger = default;
+
         [Header("General Settings")]
         [SerializeField]
         private GameObject BaseLayout = default;
@@ -65,466 +61,400 @@ namespace QSocial.Auth
         private Button ExitBackground = default;
         [SerializeField]
         private int MaximunErrorRetrys = 5;
-        
         [Header("Modules")]
         [SerializeField]
-        private MenuModule SelectionMenu = default;
+        private MenuModule menuModule = default;
         [SerializeField]
-        private SetupProfileModule SetupProfile = default;
-        [Header("Methods")]
-        [SerializeField]
-        private GuestMethod anonymousMethod = default;
-        [SerializeField]
-        private EmailMethod emailMethod = default;
+        private SetupProfileModule profileModule = default;
 
         public FirebaseAuth auth { get; private set; }
-
         public bool IsAuthenticated { get { return auth.CurrentUser != null; } }
 
-        private Dictionary<string, AuthMethod> methodsdb = new Dictionary<string, AuthMethod>();
+        private bool WasRequestedByGuest = false;
+        private bool AuthRunning = false;
+        private bool ModuleRunning = false;
+        private bool UserChecking = false;
 
-        private AuthMethod selectedMethod = null;
-
-        private AuthModule[] AuthModules = default;
-
-        public bool AuthRunning { get; private set; } = false;
-
-        internal bool UserChecking { get; private set; } = false;
-
-        private bool ModulesRunning = false;
-        private bool dbcheck = false;
-
-        private bool KeepRequest = false;
-        private bool WasrequestedbyGuest = false;
-        private bool IsGuestRequest = false;
         private bool ExitRequest = false;
-        private bool WantsCheckLogin = false;
-        private bool processStarted = false;
-
+        private bool WantsCheckdb = false;
         private float ExitTime = 0f;
 
-        // UNITY EVENTS ====
+        private AuthMethod SelectedMethod = null;
 
-        private void Start()
+
+        private Dictionary<string, AuthMethod> Methodsdb = new Dictionary<string, AuthMethod>();
+        private CommandFSM<AuthCheckState, AuthCheckCommand> fsm = new CommandFSM<AuthCheckState, AuthCheckCommand>();
+
+        private void Awake()
         {
-            if (Instance != null && Instance != this)
+            if (_instance != null && _instance != this)
             {
-                Destroy(this);
+                Destroy(_instance);
                 return;
             }
-            auth = FirebaseAuth.DefaultInstance;
-            
+
+            logger = QSocialLogger.Instance;
+
             ExitBackground.onClick.AddListener(() => RequestExit());
 
-            emailMethod.Init(this);
-            anonymousMethod.Init(this);
-
-            SelectionMenu.OnInit(this);
-            SetupProfile.OnInit(this);
+            InitFSM();
         }
+
+
 
         private void Update()
         {
-            if (AuthRunning && selectedMethod != null)
+            if (SelectedMethod != null && AuthRunning)
             {
-                selectedMethod.OnUpdate();
+                SelectedMethod.OnUpdate();
             }
-
-            if (WantsCheckLogin)
-            {
-                if (!ModulesRunning)
-                {
-                    StartCoroutine(I_CheckLogin(IsGuestRequest));
-                    WantsCheckLogin = false;
-                }
-
-                if (!KeepRequest) WantsCheckLogin = false;
-            }
-
-            Debug.Log(WantsCheckLogin);
         }
 
-        // INTERNAL API ========
-
-        internal void CompleteProfile()
+        private void InitFSM()
         {
-            OnProfileCompleted?.Invoke();
+            fsm.AddTransition(AuthCheckState.None, AuthCheckCommand.Next, () => AuthCheckState.MainMenu);
+
+            fsm.AddTransition(AuthCheckState.MainMenu, AuthCheckCommand.Next, () => AuthCheckState.AuthMethod);
+
+            fsm.AddTransition(AuthCheckState.AuthMethod, AuthCheckCommand.Next, () => AuthCheckState.SetupProfile);
+
+            fsm.AddTransition(AuthCheckState.AuthMethod, AuthCheckCommand.GoBack, () => AuthCheckState.MainMenu);
+
+            fsm.AddTransition(AuthCheckState.MainMenu, AuthCheckCommand.GoBack, () => AuthCheckState.None);
+
+            fsm.AddTransition(AuthCheckState.SetupProfile, AuthCheckCommand.Next, () => AuthCheckState.None);
+
+            fsm.OnStateChanged = (AuthCheckState state) =>
+           {
+               AuthModule module = null;
+
+               DisplayLayout(true);
+
+                switch(state)
+               {
+                   case AuthCheckState.MainMenu:
+
+                       module = menuModule;
+
+                       break;
+
+                   case AuthCheckState.AuthMethod:
+
+                       if (SelectedMethod == null )
+                       {
+                           fsm.MoveNext(AuthCheckCommand.Next);
+                       }else if (!AuthRunning)
+                       {
+                           StartCoroutine(I_ExecuteMethod());
+                       }
+
+                       break;
+
+                   case AuthCheckState.SetupProfile:
+
+                       module = profileModule;
+
+                       break;
+
+                   case AuthCheckState.None:
+
+                       DisplayLayout(false);
+
+                       break;
+               }
+
+               if (state != AuthCheckState.None && module != null)
+               {
+                   StartCoroutine(I_RunModule(module, WantsCheckdb));
+               }
+           };
         }
 
-        internal void DisplayLayout(bool display)
+        private void DisplayLayout(bool active)
         {
-            BaseLayout.SetActive(display);
-        }
-
-        // PRIVATE API ========
-
-        private void StartProcess()
-        {
-            if (processStarted) return;
-
-            if (OnProcessBegin != null)
-                OnProcessBegin.Invoke();
-
-            processStarted = true;
-        }
-
-        private void FinishProcess(System.Exception ex)
-        {
-            if (OnProcessFinish != null)
-                OnProcessFinish.Invoke(ex);
-
-            processStarted = false;
-        }
-        
-        private void SetDefaultAuthModules()
-        {
-            AuthModules = new AuthModule[] { SelectionMenu, SetupProfile };
+            BaseLayout.SetActive(active);
         }
 
         private void RequestExit()
         {
-            if (ModulesRunning)
+            if (ModuleRunning)
             {
                 ExitRequest = true;
                 ExitTime = Time.time;
             }
         }
 
-        public void RequestLogin(bool Guestvalid = false, bool checkuserindb = true, bool KeepRequestUntilAviable = false)
-        {
-            IsGuestRequest = Guestvalid;
-            dbcheck = checkuserindb;
-            KeepRequest = KeepRequestUntilAviable;
-            WantsCheckLogin = true;
-        }
-
-        private void ValidateMethods()
-        {
-            string[] keys = new string[methodsdb.Keys.Count];
-
-            methodsdb.Keys.CopyTo(keys, 0);
-
-            for (int i = 0; i < keys.Length; i++)
-            {
-                if (methodsdb.TryGetValue(keys[i], out AuthMethod method))
-                {
-                    if (!method.Enabled)
-                    {
-                        method.SetEnabled(false);
-                        continue;
-                    }
-
-                    if (auth.CurrentUser != null && auth.CurrentUser.IsAnonymous)
-                    {
-                        var attr = method.GetType().GetCustomAttribute<HasAnonymousConversionAttribute>();
-
-                        if (attr != null)
-                        {
-                            method.SetEnabled(true);
-                        }
-                        else
-                        {
-                            method.SetEnabled(false);
-                        }
-                    }
-                    else
-                    {
-                        method.SetEnabled(true);
-                    }
-                }
-            }
-        }
-
-        private void CheckUserDB(string uid)
+        private void CheckUserInDatabase(string userid)
         {
             if (!UserChecking)
-                StartCoroutine(I_CheckUserInDatabase(uid));
+                StartCoroutine(I_CheckUserDatabase(userid));
         }
 
-        // PUBLIC API ========
-
-        public void RegisterAuthMethod(AuthMethod method)
+        public void RequestLogIn(bool GuestRequest , bool Checkdb)
         {
-            if (!methodsdb.ContainsKey(method.Id))
+            WasRequestedByGuest = GuestRequest;
+            WantsCheckdb = Checkdb;
+            fsm.MoveNext(AuthCheckCommand.Next);
+        }
+
+        public void RegisterAuthMethod(AuthMethod amethod)
+        {
+            if (!Methodsdb.ContainsKey(amethod.Id))
             {
-                methodsdb.Add(method.Id, method);
+                Methodsdb.Add(amethod.Id, amethod);
             }
         }
 
-        public void ExecuteAuthMethod(string methodid)
+        public void ExecuteAuthMethod(string Id)
         {
-            if (!AuthRunning)
-                StartCoroutine(I_ExecuteMethod(methodid));
+            if (AuthRunning) return;
+
+            if (!Methodsdb.TryGetValue(Id , out SelectedMethod))
+            {
+                logger.LogError("Auth Method not found for id: " + Id, this);
+                return;
+            }
+
+            fsm.MoveNext(AuthCheckCommand.Next);
         }
 
-        public static FirebaseException GetFirebaseException(System.Exception ex)
-        {
-            return ex?.InnerException.GetBaseException() as FirebaseException;
-        }
-
-        // COROUTINES ========
-
-        private IEnumerator I_CheckUserInDatabase(string uid)
+        private IEnumerator I_CheckUserDatabase(string uid)
         {
             int retrys = 0;
-        checkuserdb:
-
+            bool shouldretry = false;
             UserChecking = true;
-            int state = -1;
+            WantsCheckdb = false;
 
-            // State = 0 --> Failed  | State = 1 --> Completed
+            ProcessResult tres = ProcessResult.None;
 
-            System.Exception eex = null;
-            Debug.Log("USER ID: " + uid);
-            
-            QDataManager.Instance.UserExists(uid, (bool exists) =>
+            while(true)
             {
-                Debug.Log("[AuthManager] User check complete, user exists: " + exists);
-
-                if (!exists)
+                if (tres == ProcessResult.None || (tres == ProcessResult.Failure && shouldretry) )
                 {
-                    Debug.Log("[AuthManager] Uploading user to database");
-                    QDataManager.Instance.RegisterPlayerToDatabase(new UserPlayer(uid, new string[0]), () =>
+                    QDataManager.Instance.UserExists(uid, (bool result) =>
                     {
-                        Debug.Log("[AuthManager] Upload user to database finished");
-                        state = 1;
+                        retrys = 0;
+
+                        if (!result)
+                        {
+                            logger.Log("User not found in database, uploading new registry", this, true);
+
+                            QDataManager.Instance.RegisterPlayerToDatabase(new UserPlayer(uid, new string[0]),
+                                () =>
+                                {
+                                    logger.Log("Upload user to database completed!", this, true);
+                                    tres = ProcessResult.Completed;
+                                }, (System.Exception ex) =>
+                               {
+                                   logger.LogWarning("Got Error during process of upload user on database " + ex, this);
+
+                                   if (retrys < MaximunErrorRetrys)
+                                   {
+                                       logger.LogWarning("Retrying upload... " + retrys, this);
+                                       retrys++;
+                                       shouldretry = true;
+                                   }
+                                   else
+                                   {
+                                       logger.LogError("Maximun error retrys reached", this);
+                                   }
+                                   tres = ProcessResult.Failure;
+                               });
+                        }else
+                        {
+                            logger.Log("User already found in database, continue without changes" , this , true);
+                            tres = ProcessResult.Completed;
+                        }
                     }, (System.Exception ex) =>
                     {
-                        Debug.LogWarning("[AuthManager] Upload user to database got error " + ex);
-                        state = 0;
+                        logger.LogWarning("Got Error during process of check user on database " + ex, this);
+
+                        if (retrys < MaximunErrorRetrys)
+                        {
+                            logger.LogWarning("Retrying check... " + retrys, this);
+                            retrys++;
+                            shouldretry = true;
+                        }else
+                        {
+                            logger.LogError("Maximun error retrys reached", this);
+                        }
+                        tres = ProcessResult.Failure;
                     });
-                }else
-                {
-                    Debug.Log("[AuthManager] user already in database, continue normally!");
-                    state = 1;
+
+                    shouldretry = false;
+                    tres = ProcessResult.Running;
                 }
-            }, (System.Exception ex) =>
-            {
-                Debug.LogError("[AuthManager] Failed to check username " + ex);
-                state = 0;
-                eex = ex;
-            });
 
-            yield return new WaitUntil(() => state == 0 || state == 1);
+                if (tres == ProcessResult.Completed || tres == ProcessResult.Failure)
+                {
+                    yield break;
+                }
 
-            if (state == 0 && retrys < MaximunErrorRetrys)
-            {
-                retrys++;
-                Debug.LogError("An error ocurred, retrying... " + retrys);
-                yield return new WaitForSeconds(0.5f);
-                goto checkuserdb;
+                yield return new WaitForEndOfFrame();
             }
-
-            UserChecking = false;
         }
 
-        // Check User Login
-        private IEnumerator I_CheckLogin(bool GuestRequest = false)
+        private IEnumerator I_RunModule(AuthModule module, bool checkuserdb)
         {
-            SetDefaultAuthModules();
+            ModuleRunning = true;
+            int retrys = 0;
 
-            ModulesRunning = true;
-            bool hasvalidated = false;
-            WasrequestedbyGuest = GuestRequest;
-            ValidateMethods();
-            float time_enter = Time.time;
-
-            if (auth.CurrentUser != null && dbcheck)
+            if (auth.CurrentUser != null && checkuserdb)
             {
-                StartProcess();
-
-                CheckUserDB(auth.CurrentUser.UserId);
-
-                Debug.Log("[AuthManager] Check user on database (login)");
+                CheckUserInDatabase(auth.CurrentUser.UserId);
 
                 yield return new WaitUntil(() => !UserChecking);
 
-                FinishProcess(null);
             }
 
-            mainmenu:
-            bool gomainmenu = false;
-            for (int i = 0; i < AuthModules.Length; i++)
+            startrunning:
+            module.OnEnter();
+
+            IAsyncModule asyncModule = module as IAsyncModule;
+            if (asyncModule != null )
             {
-                AuthModule module = AuthModules[i];
-                int retrys = 0;
-
-            moduleprocess:
-                module.OnEnter();
-
-                IAsyncModule asyncModule = module as IAsyncModule;
-
-                if (asyncModule != null)
-                {
-                    //StartProcess();
-                    
-                    yield return new WaitUntil(() => !asyncModule.IsLoading(GuestRequest, auth.CurrentUser));
-
-                    System.Exception a_exception = asyncModule.GetException();
-
-                    //FinishProcess((retrys < MaximunErrorRetrys) ? null : a_exception);
-                    
-                    if (a_exception != null)
-                    {
-                        Debug.LogWarning("[AuthManager] Execution of AsyncModule got error " + a_exception);
-
-                        retrys++;
-                        if (retrys < MaximunErrorRetrys)
-                        {
-                            Debug.LogWarning("[AuthManager] Retrying... " + retrys);
-                            yield return new WaitForSeconds(0.5f);
-                            goto moduleprocess;
-                        }
-                        else
-                        {
-                            Debug.LogError("Maximun retrys reached, continue to next module");
-                            continue;
-                        }
-                    }
-                }
-
-                if (module.IsValid(GuestRequest, auth.CurrentUser))
-                {
-                    hasvalidated = true;
-                    module.Execute(this);
-                    
-                    yield return new WaitUntil(() =>
-                    {
-                        if (Input.GetKey(KeyCode.Escape) && Time.time - time_enter >= 0.15f)
-                        {
-                            RequestExit();
-                        }
-
-                        float diff = Time.time - ExitTime;
-                        if (module.IsInterruptible() && ExitRequest && diff > 0.2f && diff < 0.5f)
-                        {
-                            if (IsAuthenticated)
-                            {
-                                gomainmenu = true;
-                                return true;
-                            }
-                            else
-                            {
-                                ExitRequest = false;
-                                return false;
-                            }
-                        }
-
-                        if (diff >= 0.55f)
-                        {
-                            ExitTime = 0;
-                        }
-
-                        return module.IsCompleted();
-                    });
-
-                    module.OnFinish(this, ExitRequest);
-                    ExitRequest = false;
-                }
-
-                if (i == AuthModules.Length - 1)
-                {
-                    if (!hasvalidated)
-                        DisplayLayout(false);
-                }
-
-            }
-
-            if (gomainmenu)
-                goto mainmenu;
-
-            Debug.Log("Check login finished");
-            ModulesRunning = false;
-            yield return 0;
-        }
-
-        // Execute auth method
-        private IEnumerator I_ExecuteMethod(string methodid)
-        {
-            if (methodsdb.TryGetValue(methodid, out selectedMethod))
-            {
-                DisplayLayout(true);
-                AuthRunning = true;
-                IAuthCustomUI customUI = selectedMethod as IAuthCustomUI;
-                customUI?.DisplayUI(auth.CurrentUser != null && auth.CurrentUser.IsAnonymous);
-
-                IAuthCustomNavigation customNavigation = selectedMethod as IAuthCustomNavigation;
-                AuthResult tres = AuthResult.None;
-
-            process:
-
-                selectedMethod.OnEnter();
-                if (OnAuthBegin != null) OnAuthBegin.Invoke();
-                bool processstarted = false;
-
+                ProcessResult ares = ProcessResult.None;
                 do
                 {
-                    tres = selectedMethod.GetResult();
-                    bool goback = (customNavigation != null) ? customNavigation.GoBack() : Input.GetKey(KeyCode.Escape);
-
-                    if (customUI != null && tres == AuthResult.None && goback)
-                    {
-                        customUI?.HideUI();
-                        OnAuthCancelled?.Invoke();
-                        RequestLogin(WasrequestedbyGuest , true);
-                        break;
-                    }
-
-                    Debug.Log(tres);
-
-                    if (tres == AuthResult.Running && !processstarted)
-                    {
-                       // StartProcess();
-                        processstarted = true;
-                    }
+                    ares = asyncModule.AsyncResult();
 
                     yield return new WaitForEndOfFrame();
 
-                } while (tres == AuthResult.None || tres == AuthResult.Running);
+                } while (ares == ProcessResult.None || ares == ProcessResult.Running);
 
-
-                if (tres == AuthResult.Completed)
+                if (ares == ProcessResult.Failure)
                 {
-                    if (tres == AuthResult.Completed)
+                    logger.LogWarning("Got Error during process of AsyncModule " + module.GetException(), this);
+
+                    if (retrys < MaximunErrorRetrys)
                     {
-                        selectedMethod.OnFinish();
+                        logger.LogWarning("Retrying... " + retrys, this);
+                        retrys++;
+                        goto startrunning;
+                    }
+                }
+            }
+
+            retrys = 0;
+
+            if (module.IsValid(WasRequestedByGuest , auth.CurrentUser))
+            {
+                runmodule:
+                module.Execute(this);
+
+                ProcessResult tres = ProcessResult.None;
+                float time_enter = Time.time;
+
+                do
+                {
+                   tres = module.GetResult();
+
+                    if (Input.GetKey(KeyCode.Escape) && Time.time - time_enter >= 0.15f)
+                    {
+                        RequestExit();
                     }
 
-                    Debug.Log("[AuthManager] Check user in database");
+                    // Interrumpt the module when you're about to upgrade the acocount 
+                    float diff = Time.time - ExitTime;
+                    if (IsAuthenticated && (module.IsInterruptible() && ExitRequest && diff > 0.2f && diff < 0.5f))
+                    {
+                        fsm.MoveNext(AuthCheckCommand.GoBack);
+                        ModuleRunning = false;
+                        yield break;
+                    }
 
+                    if (diff >= 0.55f)
+                    {
+                        ExitTime = 0;
+                    }
 
-                    CheckUserDB(selectedMethod.ResultUserId);
+                    yield return new WaitForEndOfFrame();
+                } while (tres == ProcessResult.None || tres == ProcessResult.Running);
 
-                    yield return new WaitUntil(() => !UserChecking);
-
-
-
-                    customUI?.HideUI();
-
-                    OnAuthCompleted?.Invoke();
-
-                    RequestLogin(WasrequestedbyGuest, false , true);
-                }
-                else if (tres == AuthResult.Failure)
+                if (tres == ProcessResult.Failure)
                 {
-                    OnAuthFail?.Invoke(selectedMethod.GetException());
-                    Debug.LogError("[AuthManager] Auth Fail! " + selectedMethod.GetException());
-                    FinishProcess(selectedMethod.GetException());
-                    selectedMethod.OnFinish();
-                    tres = AuthResult.None;
-                    goto process;
+                    logger.LogWarning("Got Error during process of Module " + module.GetException(), this);
+
+                    if (retrys < MaximunErrorRetrys)
+                    {
+                        logger.LogWarning("Retrying... " + retrys, this);
+                        retrys++;
+                        goto runmodule;
+                    }
                 }
-            }
-            else
+
+                module.OnFinish(this,ExitRequest);
+                ExitRequest = false;
+            }else
             {
-                Debug.LogError("[AuthManager] Method not found: " + methodid);
+                fsm.MoveNext(AuthCheckCommand.Next);
+                ModuleRunning = false;
+                yield break;
             }
 
-            Debug.Log("Auth execution Finished!");
-            FinishProcess(null);
-            AuthRunning = false;
-            selectedMethod = null;
+            ModuleRunning = false;
             yield return 0;
         }
+
+        private IEnumerator I_ExecuteMethod()
+        {
+            if (SelectedMethod != null )
+            {
+                int retrys = 0;
+                AuthRunning = true;
+                DisplayLayout(true);
+                IAuthCustomUI customUI = SelectedMethod as IAuthCustomUI;
+
+                if (customUI != null) customUI.DisplayUI(auth.CurrentUser != null && auth.CurrentUser.IsAnonymous);
+
+                IAuthCustomNavigation customNavigation = SelectedMethod as IAuthCustomNavigation;
+
+            Execution:
+                SelectedMethod.OnEnter();
+
+                ProcessResult tres = ProcessResult.None;
+                do
+                {
+                    tres = SelectedMethod.GetResult();
+                    bool goback = (customNavigation != null) ? customNavigation.GoBack() : Input.GetKey(KeyCode.Escape);
+
+                    if (customUI != null && tres == ProcessResult.None && goback)
+                    {
+                        customUI?.HideUI();
+                        //OnAuthCancelled?.Invoke();
+                        
+                        fsm.MoveNext(AuthCheckCommand.GoBack);
+                        break;
+                    }
+
+                    logger.Log("Auth Running: " + tres , this , true);
+                    yield return new WaitForEndOfFrame();
+                } while (tres == ProcessResult.None || tres == ProcessResult.Running);
+
+                if (tres == ProcessResult.Failure)
+                {
+                    logger.LogWarning("Got Error during process of Module " + SelectedMethod.GetException(), this);
+
+                    if (retrys < MaximunErrorRetrys)
+                    {
+                        logger.LogWarning("Retrying... " + retrys, this);
+                        retrys++;
+                        goto Execution;
+                    }
+
+                }else if (tres == ProcessResult.Completed)
+                {
+                    SelectedMethod.OnFinish();
+
+                    fsm.MoveNext(AuthCheckCommand.Next);
+                }
+            }
+
+            AuthRunning = false;
+            SelectedMethod = null;
+            logger.Log("Auth Execution Finished", this , true);
+            yield return 0;
+        }
+
     }
 }

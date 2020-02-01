@@ -11,7 +11,7 @@ namespace QSocial.Auth
 
         [SerializeField]
         private Button SelectionButton = default;
-        
+
         public bool Enabled { get => enabled; }
 
         public abstract string Id { get; }
@@ -37,7 +37,7 @@ namespace QSocial.Auth
             SelectionButton.gameObject.SetActive(enabled);
         }
 
-        public abstract AuthResult GetResult();
+        public abstract ProcessResult GetResult();
 
         protected virtual void OnInit(AuthManager manager) { }
 
