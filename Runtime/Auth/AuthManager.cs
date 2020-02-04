@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
+using Firebase;
 using Firebase.Auth;
 using CommandStateMachine;
 using QSocial.Data;
 using QSocial.Data.Users;
 using QSocial.Utility;
 using QSocial.Auth.Modules;
+using QSocial.Auth.Methods;
 
 namespace QSocial.Auth
 {
@@ -22,7 +24,17 @@ namespace QSocial.Auth
 
         public static event _OnAuthCompleted OnAuthCompleted;
 
+        public delegate void _OnProcessBegin();
 
+        public static event _OnProcessBegin OnProcessBegin;
+
+        public delegate void _OnProcessFinish();
+
+        public static event _OnProcessFinish OnProcessFinish;
+
+        public delegate void _OnProfileCompleted();
+
+        public static event _OnProfileCompleted OnProfileCompleted;
 
         private static AuthManager _instance = null;
 
@@ -52,7 +64,7 @@ namespace QSocial.Auth
             Next = 2
         }
 
-        private QSocialLogger logger = default;
+        internal QSocialLogger logger { get; private set; } 
 
         [Header("General Settings")]
         [SerializeField]
@@ -66,6 +78,11 @@ namespace QSocial.Auth
         private MenuModule menuModule = default;
         [SerializeField]
         private SetupProfileModule profileModule = default;
+        [Header("Built-In Methods")]
+        [SerializeField]
+        private EmailMethod emailMethod = default;
+        [SerializeField]
+        private AnonymousMethod anonymousMethod = default;
 
         public FirebaseAuth auth { get; private set; }
         public bool IsAuthenticated { get { return auth.CurrentUser != null; } }
@@ -93,14 +110,18 @@ namespace QSocial.Auth
                 return;
             }
 
+            auth = FirebaseAuth.DefaultInstance;
+
             logger = QSocialLogger.Instance;
 
             ExitBackground.onClick.AddListener(() => RequestExit());
 
+
+            emailMethod.Init(this);
+            anonymousMethod.Init(this);
+
             InitFSM();
         }
-
-
 
         private void Update()
         {
@@ -126,6 +147,9 @@ namespace QSocial.Auth
 
             fsm.OnStateChanged = (AuthCheckState state) =>
            {
+
+               logger.Log("State changed " + state , this, true);
+
                AuthModule module = null;
 
                DisplayLayout(true);
@@ -142,7 +166,8 @@ namespace QSocial.Auth
 
                        if (SelectedMethod == null )
                        {
-                           fsm.MoveNext(AuthCheckCommand.Next);
+                           Debug.Log("Method null");
+                           //fsm.MoveNext(AuthCheckCommand.Next);
                        }else if (!AuthRunning)
                        {
                            StartCoroutine(I_ExecuteMethod());
@@ -190,8 +215,27 @@ namespace QSocial.Auth
                 StartCoroutine(I_CheckUserDatabase(userid));
         }
 
-        public void RequestLogIn(bool GuestRequest , bool Checkdb)
+        internal static void BeginProcess()
         {
+            if (OnProcessBegin != null)
+                OnProcessBegin.Invoke();
+        }
+
+        internal static void FinishProcess()
+        {
+            if (OnProcessFinish != null)
+                OnProcessFinish.Invoke();
+        }
+
+        internal static void CompleteProfile()
+        {
+            if (OnProfileCompleted != null) OnProfileCompleted.Invoke();
+        }
+
+        public void RequestLogIn(bool GuestRequest = false , bool Checkdb = false)
+        {
+            if (AuthRunning || ModuleRunning) return;
+
             WasRequestedByGuest = GuestRequest;
             WantsCheckdb = Checkdb;
             fsm.MoveNext(AuthCheckCommand.Next);
@@ -216,6 +260,20 @@ namespace QSocial.Auth
             }
 
             fsm.MoveNext(AuthCheckCommand.Next);
+        }
+
+        public static System.Exception GetFirebaseException(System.Exception ex)
+        {
+            if (ex != null )
+            {
+                System.Exception a_ex =  ex.InnerException.GetBaseException();
+                if (a_ex.GetType() == typeof(FirebaseException))
+                {
+                    return a_ex as FirebaseException;
+                }
+                return a_ex;
+            }
+            return null;
         }
 
         private IEnumerator I_CheckUserDatabase(string uid)
@@ -299,12 +357,13 @@ namespace QSocial.Auth
             ModuleRunning = true;
             int retrys = 0;
 
+            logger.Log("Module ::: " + module, this, true);
+
             if (auth.CurrentUser != null && checkuserdb)
             {
                 CheckUserInDatabase(auth.CurrentUser.UserId);
 
                 yield return new WaitUntil(() => !UserChecking);
-
             }
 
             startrunning:
@@ -339,6 +398,8 @@ namespace QSocial.Auth
 
             if (module.IsValid(WasRequestedByGuest , auth.CurrentUser))
             {
+                Debug.Log("Module valid");
+
                 runmodule:
                 module.Execute(this);
 
@@ -354,10 +415,12 @@ namespace QSocial.Auth
                         RequestExit();
                     }
 
-                    // Interrumpt the module when you're about to upgrade the acocount 
+                    //Interrumpt the module when you're about to upgrade the acocount 
                     float diff = Time.time - ExitTime;
                     if (IsAuthenticated && (module.IsInterruptible() && ExitRequest && diff > 0.2f && diff < 0.5f))
                     {
+
+                        Debug.Log("Move next! -- go back");
                         fsm.MoveNext(AuthCheckCommand.GoBack);
                         ModuleRunning = false;
                         yield break;
@@ -383,10 +446,12 @@ namespace QSocial.Auth
                     }
                 }
 
+                Debug.Log("Module completed!");
                 module.OnFinish(this,ExitRequest);
                 ExitRequest = false;
             }else
             {
+                Debug.Log("Move next!");
                 fsm.MoveNext(AuthCheckCommand.Next);
                 ModuleRunning = false;
                 yield break;
@@ -420,10 +485,12 @@ namespace QSocial.Auth
 
                     if (customUI != null && tres == ProcessResult.None && goback)
                     {
-                        customUI?.HideUI();
-                        //OnAuthCancelled?.Invoke();
-                        
+                        customUI.HideUI();
+
+                        if (OnAuthCancelled != null) OnAuthCancelled.Invoke();
+
                         fsm.MoveNext(AuthCheckCommand.GoBack);
+
                         break;
                     }
 
@@ -447,6 +514,9 @@ namespace QSocial.Auth
                     SelectedMethod.OnFinish();
 
                     fsm.MoveNext(AuthCheckCommand.Next);
+
+                    if (OnAuthCompleted != null)
+                        OnAuthCompleted.Invoke();
                 }
             }
 

@@ -4,6 +4,7 @@ using Firebase.Auth;
 
 namespace QSocial.Auth.Modules
 {
+    [System.Serializable]
     public class MenuModule : AuthModule
     {
         private ProcessResult result = ProcessResult.None;
@@ -22,6 +23,7 @@ namespace QSocial.Auth.Modules
         public override void Execute(AuthManager manager)
         {
             MenuLayout.SetActive(true);
+            result = ProcessResult.Running;
         }
 
         public override void OnFinish(AuthManager manager , bool Interrumpted)
