@@ -9,10 +9,18 @@ namespace QSocial.Data.Users
         public string userid;
         public string[] friends;
 
+        public UserPlayer(string Userid)
+        {
+            userid = Userid;
+            friends = new string[0];
+            username = string.Empty;
+        }
+
         public UserPlayer(string Userid, string[] Friends)
         {
             userid = Userid;
             friends = Friends;
+            username = string.Empty;
         }
 
         public UserPlayer (string Username, string Userid, string[] Friends)

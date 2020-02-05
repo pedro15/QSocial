@@ -6,9 +6,6 @@ using UnityEngine.UI;
 using Firebase;
 using Firebase.Auth;
 using CommandStateMachine;
-using QSocial.Data;
-using QSocial.Data.Users;
-using QSocial.Utility;
 using QSocial.Auth.Modules;
 using QSocial.Auth.Methods;
 using Logger = QSocial.Utility.QSocialLogger;
@@ -55,7 +52,8 @@ namespace QSocial.Auth
             None = 1,
             MainMenu = 2,
             AuthMethod = 4,
-            SetupProfile = 8
+            DatabaseCheck = 8,
+            SetupProfile = 16
         }
 
         [System.Flags]
@@ -78,6 +76,8 @@ namespace QSocial.Auth
         private MenuModule menuModule = default;
         [SerializeField]
         private SetupProfileModule profileModule = default;
+        [SerializeField]
+        private DatabaseCheckModule databaseCheck = default;
         [Header("Built-In Methods")]
         [SerializeField]
         private EmailMethod emailMethod = default;
@@ -90,10 +90,8 @@ namespace QSocial.Auth
         private bool WasRequestedByGuest = false;
         private bool AuthRunning = false;
         private bool ModuleRunning = false;
-        private bool UserChecking = false;
-
+        
         private bool ExitRequest = false;
-        private bool WantsCheckdb = false;
         private float ExitTime = 0f;
 
         private AuthMethod SelectedMethod = null;
@@ -137,7 +135,9 @@ namespace QSocial.Auth
 
             fsm.AddTransition(AuthCheckState.MainMenu, AuthCheckCommand.Next, () => AuthCheckState.AuthMethod);
 
-            fsm.AddTransition(AuthCheckState.AuthMethod, AuthCheckCommand.Next, () => AuthCheckState.SetupProfile);
+            fsm.AddTransition(AuthCheckState.AuthMethod, AuthCheckCommand.Next, () => AuthCheckState.DatabaseCheck);
+
+            fsm.AddTransition(AuthCheckState.DatabaseCheck, AuthCheckCommand.Next, () => AuthCheckState.SetupProfile);
 
             fsm.AddTransition(AuthCheckState.AuthMethod, AuthCheckCommand.GoBack, () => AuthCheckState.MainMenu);
 
@@ -145,7 +145,7 @@ namespace QSocial.Auth
 
             fsm.AddTransition(AuthCheckState.SetupProfile, AuthCheckCommand.Next, () => AuthCheckState.None);
 
-            fsm.AddTransition(AuthCheckState.AuthMethod, AuthCheckCommand.Exit, () => AuthCheckState.None);
+            fsm.AddTransition(AuthCheckState.DatabaseCheck, AuthCheckCommand.Exit, () => AuthCheckState.None);
 
             fsm.OnStateChanged = (AuthCheckState state) =>
            {
@@ -168,10 +168,22 @@ namespace QSocial.Auth
 
                        if (SelectedMethod == null )
                        {
-                           fsm.MoveNext(AuthCheckCommand.Exit);
+                           fsm.MoveNext(AuthCheckCommand.Next);
                        }else if (!AuthRunning)
                        {
                            StartCoroutine(I_ExecuteMethod());
+                       }
+
+                       break;
+
+                   case AuthCheckState.DatabaseCheck:
+
+                       if (auth.CurrentUser != null)
+                       {
+                            module = databaseCheck;
+                       }else
+                       {
+                           fsm.MoveNext(AuthCheckCommand.Exit);
                        }
 
                        break;
@@ -191,7 +203,7 @@ namespace QSocial.Auth
 
                if (state != AuthCheckState.None && module != null)
                {
-                   StartCoroutine(I_RunModule(module, WantsCheckdb));
+                   StartCoroutine(I_RunModule(module));
                }
            };
         }
@@ -208,12 +220,6 @@ namespace QSocial.Auth
                 ExitRequest = true;
                 ExitTime = Time.time;
             }
-        }
-
-        private void CheckUserInDatabase(string userid)
-        {
-            if (!UserChecking)
-                StartCoroutine(I_CheckUserDatabase(userid));
         }
 
         internal static void BeginProcess()
@@ -238,7 +244,6 @@ namespace QSocial.Auth
             if (AuthRunning || ModuleRunning) return;
 
             WasRequestedByGuest = GuestRequest;
-            WantsCheckdb = Checkdb;
             fsm.MoveNext(AuthCheckCommand.Next);
         }
 
@@ -275,96 +280,13 @@ namespace QSocial.Auth
             return null;
         }
 
-        private IEnumerator I_CheckUserDatabase(string uid)
-        {
-            int retrys = 0;
-            bool shouldretry = false;
-            UserChecking = true;
-            WantsCheckdb = false;
-
-            ProcessResult tres = ProcessResult.None;
-
-            while(true)
-            {
-                if (tres == ProcessResult.None || (tres == ProcessResult.Failure && shouldretry) )
-                {
-                    QDataManager.Instance.UserExists(uid, (bool result) =>
-                    {
-                        retrys = 0;
-
-                        if (!result)
-                        {
-                            Logger.Log("User not found in database, uploading new registry", this, true);
-
-                            QDataManager.Instance.RegisterPlayerToDatabase(new UserPlayer(uid, new string[0]),
-                                () =>
-                                {
-                                    Logger.Log("Upload user to database completed!", this, true);
-                                    tres = ProcessResult.Completed;
-                                }, (System.Exception ex) =>
-                               {
-                                   Logger.LogWarning("Got Error during process of upload user on database " + ex, this);
-
-                                   if (retrys < MaximunErrorRetrys)
-                                   {
-                                       Logger.LogWarning("Retrying upload... " + retrys, this);
-                                       retrys++;
-                                       shouldretry = true;
-                                   }
-                                   else
-                                   {
-                                       Logger.LogError("Maximun error retrys reached", this);
-                                   }
-                                   tres = ProcessResult.Failure;
-                               });
-                        }else
-                        {
-                            Logger.Log("User already found in database, continue without changes" , this , true);
-                            tres = ProcessResult.Completed;
-                        }
-                    }, (System.Exception ex) =>
-                    {
-                        Logger.LogWarning("Got Error during process of check user on database " + ex, this);
-
-                        if (retrys < MaximunErrorRetrys)
-                        {
-                            Logger.LogWarning("Retrying check... " + retrys, this);
-                            retrys++;
-                            shouldretry = true;
-                        }else
-                        {
-                            Logger.LogError("Maximun error retrys reached", this);
-                        }
-                        tres = ProcessResult.Failure;
-                    });
-
-                    shouldretry = false;
-                    tres = ProcessResult.Running;
-                }
-
-                if (tres == ProcessResult.Completed || tres == ProcessResult.Failure)
-                {
-                    yield break;
-                }
-
-                yield return new WaitForEndOfFrame();
-            }
-        }
-
-        private IEnumerator I_RunModule(AuthModule module, bool checkuserdb)
+        private IEnumerator I_RunModule(AuthModule module)
         {
             ModuleRunning = true;
             int retrys = 0;
 
             Logger.Log("Module ::: " + module, this, true);
-
-            if (auth.CurrentUser != null && checkuserdb)
-            {
-                CheckUserInDatabase(auth.CurrentUser.UserId);
-
-                yield return new WaitUntil(() => !UserChecking);
-            }
-
+            
             startrunning:
             module.OnEnter();
 

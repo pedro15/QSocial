@@ -103,7 +103,7 @@ namespace QSocial.Auth.Modules
 
                                 QEventExecutor.ExecuteInUpdate(() =>
                                 {
-                                    Logger.LogError("Setup Profile Completed!", this);
+                                    Logger.Log("Setup Profile Completed!", this , true);
                                     result = ProcessResult.Completed;
                                     AuthManager.FinishProcess();
                                     AuthManager.CompleteProfile();
