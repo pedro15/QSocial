@@ -107,11 +107,11 @@ namespace QSocial.Data
 
                     if (string.IsNullOrEmpty(rawdata))
                     {
-                        OnFailure?.Invoke(new System.Exception("No user data found!"));
-                        return;
+                        Debug.LogWarning("No user data found");
+                        Result.Invoke(false);
                     }
 
-                    Debug.Log(rawdata);
+                    Debug.Log("User data" + rawdata);
                     JSONNode root = JSON.Parse(rawdata);
 
                     Result.Invoke(!string.IsNullOrEmpty(root["username"].Value));

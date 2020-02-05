@@ -6,7 +6,7 @@ namespace QSocial.Utility
     {
         private static QSocialLogger _instance = null;
 
-        public static QSocialLogger Instance
+        private static QSocialLogger Instance
         {
             get
             {
@@ -30,31 +30,33 @@ namespace QSocial.Utility
             _instance = this;
         }
 
-        public void LogError(object message, object context)
+        public static void LogError(object message, object context)
         {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             Debug.LogError(FormatMessage(message, context), context as Object);
 #endif
         }
 
-        public void Log(object message, object context, bool IsExtraInfo = false)
+        public static void Log(object message, object context, bool IsExtraInfo = false)
         {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+            LogMode logMode = Instance.logMode;
             if (!IsExtraInfo && (logMode == LogMode.Info || logMode == LogMode.Full) ||
                 IsExtraInfo && logMode == LogMode.Full)
                 Debug.Log(FormatMessage(message, context), context as Object);
 #endif
         }
 
-        public void LogWarning(object message, object context)
+        public static void LogWarning(object message, object context)
         {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+            LogMode logMode = Instance.logMode;
             if (logMode == LogMode.Full)
                 Debug.LogWarning(FormatMessage(message, context), context as Object);
 #endif
         }
 
-        private string FormatMessage(object message, object context)
+        private static string FormatMessage(object message, object context)
         {
             return $"[ { context.GetType().Name } ] { message }";
         }

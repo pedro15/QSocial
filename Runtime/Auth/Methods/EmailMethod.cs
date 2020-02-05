@@ -4,6 +4,7 @@ using TMPro;
 
 using Firebase.Auth;
 using QSocial.Utility;
+using Logger = QSocial.Utility.QSocialLogger;
 
 namespace QSocial.Auth.Methods
 {
@@ -113,7 +114,7 @@ namespace QSocial.Auth.Methods
                         QEventExecutor.ExecuteInUpdate(() =>
                         {
                             ex = AuthManager.GetFirebaseException(task.Exception);
-                            AuthManager.Instance.logger.LogError("Error sending password " + ex, this);
+                            Logger.LogError("Error sending password " + ex, this);
                             AuthManager.FinishProcess();
                             result = ProcessResult.Failure;
                         });
@@ -122,7 +123,7 @@ namespace QSocial.Auth.Methods
 
                     QEventExecutor.ExecuteInUpdate(() =>
                     {
-                        AuthManager.Instance.logger.Log("Password sent correctly", this , true);
+                        Logger.Log("Password sent correctly", this , true);
                         nav = emailNavigation.ForgotPasswordFinish;
                         UpdateLayout();
                         result = ProcessResult.Running;
@@ -153,7 +154,7 @@ namespace QSocial.Auth.Methods
                                     {
                                         AuthManager.FinishProcess();
                                         ex = AuthManager.GetFirebaseException(task.Exception);
-                                        AuthManager.Instance.logger.LogError("Fail to link account " + ex, this);
+                                        Logger.LogError("Fail to link account " + ex, this);
                                         result = ProcessResult.Running;
                                     });
                                     return;
@@ -162,14 +163,14 @@ namespace QSocial.Auth.Methods
                                 QEventExecutor.ExecuteInUpdate(() =>
                                 {
                                     AuthManager.FinishProcess();
-                                    AuthManager.Instance.logger.Log("Link Account completed!" , this , true);
+                                    Logger.Log("Link Account completed!" , this , true);
                                     result = ProcessResult.Completed;
                                 });
                             });
                         }
                         else
                         {
-                            AuthManager.Instance.logger.LogWarning("User is not anonymous!", this);
+                            Logger.LogWarning("User is not anonymous!", this);
                             result = ProcessResult.Failure;
                         }
                     }
@@ -185,7 +186,7 @@ namespace QSocial.Auth.Methods
                                        {
                                            AuthManager.FinishProcess();
                                            ex = AuthManager.GetFirebaseException(task.Exception);
-                                           AuthManager.Instance.logger.LogError("Failed to create user with email " + ex, this);
+                                           Logger.LogError("Failed to create user with email " + ex, this);
                                            result = ProcessResult.Failure;
                                        });
                                        return;
@@ -194,7 +195,7 @@ namespace QSocial.Auth.Methods
                                    QEventExecutor.ExecuteInUpdate(() =>
                                    {
                                        AuthManager.FinishProcess();
-                                       AuthManager.Instance.logger.Log("Create user with email done", this, true);
+                                       Logger.Log("Create user with email done", this, true);
                                        uid = task.Result.UserId;
                                        result = ProcessResult.Completed;
                                    });
@@ -204,7 +205,7 @@ namespace QSocial.Auth.Methods
                 }
                 else
                 {
-                    AuthManager.Instance.logger.LogWarning("Passwords must match", this);
+                    Logger.LogWarning("Passwords must match", this);
                     result = ProcessResult.None;
                 }
             });

@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using QSocial.Data;
 using QSocial.Utility;
+using Logger = QSocial.Utility.QSocialLogger;
 
 namespace QSocial.Auth.Modules
 {
@@ -92,7 +93,7 @@ namespace QSocial.Auth.Modules
                                 {
                                     QEventExecutor.ExecuteInUpdate(() =>
                                     {
-                                        AuthManager.Instance.logger.LogError("Setup Profile Failure!", this);
+                                        Logger.LogError("Setup Profile Failure!", this);
 
                                         result = ProcessResult.None;
                                         AuthManager.FinishProcess();
@@ -102,7 +103,7 @@ namespace QSocial.Auth.Modules
 
                                 QEventExecutor.ExecuteInUpdate(() =>
                                 {
-                                    AuthManager.Instance.logger.LogError("Setup Profile Completed!", this);
+                                    Logger.LogError("Setup Profile Completed!", this);
                                     result = ProcessResult.Completed;
                                     AuthManager.FinishProcess();
                                     AuthManager.CompleteProfile();
@@ -112,28 +113,28 @@ namespace QSocial.Auth.Modules
                         (System.Exception ex) =>
                         {
                             m_ex = ex;
-                            AuthManager.Instance.logger.LogError("An error ocurrer at register nickname " + ex , this);
+                            Logger.LogError("An error ocurrer at register nickname " + ex , this);
                             result = ProcessResult.None;
                             AuthManager.FinishProcess();
                         });
                     }
                     else
                     {
-                        AuthManager.Instance.logger.LogWarning("Nickname already in the database", this);
+                        Logger.LogWarning("Nickname already in the database", this);
                         result = ProcessResult.None;
                         AuthManager.FinishProcess();
                     }
                 }, (System.Exception ex) =>
                 {
                     m_ex = ex;
-                    AuthManager.Instance.logger.LogError("Error at checking nickname" + ex , this);
+                    Logger.LogError("Error at checking nickname" + ex , this);
                     result = ProcessResult.None;
                     AuthManager.FinishProcess();
                 });
             }
             else
             {
-                AuthManager.Instance.logger.LogWarning("Nickname selected is not valid", this);
+                Logger.LogWarning("Nickname selected is not valid", this);
                 result = ProcessResult.None;
                 AuthManager.FinishProcess();
             }

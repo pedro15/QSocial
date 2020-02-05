@@ -11,6 +11,7 @@ using QSocial.Data.Users;
 using QSocial.Utility;
 using QSocial.Auth.Modules;
 using QSocial.Auth.Methods;
+using Logger = QSocial.Utility.QSocialLogger;
 
 namespace QSocial.Auth
 {
@@ -61,10 +62,9 @@ namespace QSocial.Auth
         private enum AuthCheckCommand : int
         {
             GoBack = 1,
-            Next = 2
+            Next = 2,
+            Exit = 4
         }
-
-        internal QSocialLogger logger { get; private set; } 
 
         [Header("General Settings")]
         [SerializeField]
@@ -112,10 +112,10 @@ namespace QSocial.Auth
 
             auth = FirebaseAuth.DefaultInstance;
 
-            logger = QSocialLogger.Instance;
-
             ExitBackground.onClick.AddListener(() => RequestExit());
 
+            menuModule.OnInit(this);
+            profileModule.OnInit(this);
 
             emailMethod.Init(this);
             anonymousMethod.Init(this);
@@ -145,10 +145,12 @@ namespace QSocial.Auth
 
             fsm.AddTransition(AuthCheckState.SetupProfile, AuthCheckCommand.Next, () => AuthCheckState.None);
 
+            fsm.AddTransition(AuthCheckState.AuthMethod, AuthCheckCommand.Exit, () => AuthCheckState.None);
+
             fsm.OnStateChanged = (AuthCheckState state) =>
            {
 
-               logger.Log("State changed " + state , this, true);
+               Logger.Log("State changed " + state , this, true);
 
                AuthModule module = null;
 
@@ -166,8 +168,7 @@ namespace QSocial.Auth
 
                        if (SelectedMethod == null )
                        {
-                           Debug.Log("Method null");
-                           //fsm.MoveNext(AuthCheckCommand.Next);
+                           fsm.MoveNext(AuthCheckCommand.Exit);
                        }else if (!AuthRunning)
                        {
                            StartCoroutine(I_ExecuteMethod());
@@ -255,11 +256,9 @@ namespace QSocial.Auth
 
             if (!Methodsdb.TryGetValue(Id , out SelectedMethod))
             {
-                logger.LogError("Auth Method not found for id: " + Id, this);
+                Logger.LogError("Auth Method not found for id: " + Id, this);
                 return;
             }
-
-            fsm.MoveNext(AuthCheckCommand.Next);
         }
 
         public static System.Exception GetFirebaseException(System.Exception ex)
@@ -295,46 +294,46 @@ namespace QSocial.Auth
 
                         if (!result)
                         {
-                            logger.Log("User not found in database, uploading new registry", this, true);
+                            Logger.Log("User not found in database, uploading new registry", this, true);
 
                             QDataManager.Instance.RegisterPlayerToDatabase(new UserPlayer(uid, new string[0]),
                                 () =>
                                 {
-                                    logger.Log("Upload user to database completed!", this, true);
+                                    Logger.Log("Upload user to database completed!", this, true);
                                     tres = ProcessResult.Completed;
                                 }, (System.Exception ex) =>
                                {
-                                   logger.LogWarning("Got Error during process of upload user on database " + ex, this);
+                                   Logger.LogWarning("Got Error during process of upload user on database " + ex, this);
 
                                    if (retrys < MaximunErrorRetrys)
                                    {
-                                       logger.LogWarning("Retrying upload... " + retrys, this);
+                                       Logger.LogWarning("Retrying upload... " + retrys, this);
                                        retrys++;
                                        shouldretry = true;
                                    }
                                    else
                                    {
-                                       logger.LogError("Maximun error retrys reached", this);
+                                       Logger.LogError("Maximun error retrys reached", this);
                                    }
                                    tres = ProcessResult.Failure;
                                });
                         }else
                         {
-                            logger.Log("User already found in database, continue without changes" , this , true);
+                            Logger.Log("User already found in database, continue without changes" , this , true);
                             tres = ProcessResult.Completed;
                         }
                     }, (System.Exception ex) =>
                     {
-                        logger.LogWarning("Got Error during process of check user on database " + ex, this);
+                        Logger.LogWarning("Got Error during process of check user on database " + ex, this);
 
                         if (retrys < MaximunErrorRetrys)
                         {
-                            logger.LogWarning("Retrying check... " + retrys, this);
+                            Logger.LogWarning("Retrying check... " + retrys, this);
                             retrys++;
                             shouldretry = true;
                         }else
                         {
-                            logger.LogError("Maximun error retrys reached", this);
+                            Logger.LogError("Maximun error retrys reached", this);
                         }
                         tres = ProcessResult.Failure;
                     });
@@ -357,7 +356,7 @@ namespace QSocial.Auth
             ModuleRunning = true;
             int retrys = 0;
 
-            logger.Log("Module ::: " + module, this, true);
+            Logger.Log("Module ::: " + module, this, true);
 
             if (auth.CurrentUser != null && checkuserdb)
             {
@@ -383,12 +382,13 @@ namespace QSocial.Auth
 
                 if (ares == ProcessResult.Failure)
                 {
-                    logger.LogWarning("Got Error during process of AsyncModule " + module.GetException(), this);
+                    Logger.LogWarning("Got Error during process of AsyncModule " + module.GetException(), this);
 
                     if (retrys < MaximunErrorRetrys)
                     {
-                        logger.LogWarning("Retrying... " + retrys, this);
+                        Logger.LogWarning("Retrying... " + retrys, this);
                         retrys++;
+                        yield return new WaitForSeconds(0.5f);
                         goto startrunning;
                     }
                 }
@@ -408,7 +408,9 @@ namespace QSocial.Auth
 
                 do
                 {
-                   tres = module.GetResult();
+                    tres = module.GetResult();
+
+                    Debug.Log(module.GetType().Name + " :: " + tres);
 
                     if (Input.GetKey(KeyCode.Escape) && Time.time - time_enter >= 0.15f)
                     {
@@ -436,22 +438,26 @@ namespace QSocial.Auth
 
                 if (tres == ProcessResult.Failure)
                 {
-                    logger.LogWarning("Got Error during process of Module " + module.GetException(), this);
+                    Logger.LogWarning("Got Error during process of Module " + module.GetException(), this);
 
                     if (retrys < MaximunErrorRetrys)
                     {
-                        logger.LogWarning("Retrying... " + retrys, this);
+                        Logger.LogWarning("Retrying... " + retrys, this);
                         retrys++;
                         goto runmodule;
                     }
                 }
 
-                Debug.Log("Module completed!");
-                module.OnFinish(this,ExitRequest);
-                ExitRequest = false;
+                if (tres == ProcessResult.Completed)
+                {
+                    Debug.Log("<color=blue>Module completed!</color>");
+                    module.OnFinish(this,ExitRequest);
+                    fsm.MoveNext(AuthCheckCommand.Next);
+                    ExitRequest = false;
+                }
+
             }else
             {
-                Debug.Log("Move next!");
                 fsm.MoveNext(AuthCheckCommand.Next);
                 ModuleRunning = false;
                 yield break;
@@ -494,17 +500,17 @@ namespace QSocial.Auth
                         break;
                     }
 
-                    logger.Log("Auth Running: " + tres , this , true);
+                    Logger.Log("Auth Running: " + tres , this , true);
                     yield return new WaitForEndOfFrame();
                 } while (tres == ProcessResult.None || tres == ProcessResult.Running);
 
                 if (tres == ProcessResult.Failure)
                 {
-                    logger.LogWarning("Got Error during process of Module " + SelectedMethod.GetException(), this);
+                    Logger.LogWarning("Got Error during process of Module " + SelectedMethod.GetException(), this);
 
                     if (retrys < MaximunErrorRetrys)
                     {
-                        logger.LogWarning("Retrying... " + retrys, this);
+                        Logger.LogWarning("Retrying... " + retrys, this);
                         retrys++;
                         goto Execution;
                     }
@@ -522,7 +528,7 @@ namespace QSocial.Auth
 
             AuthRunning = false;
             SelectedMethod = null;
-            logger.Log("Auth Execution Finished", this , true);
+            Logger.Log("Auth Execution Finished", this , true);
             yield return 0;
         }
 
