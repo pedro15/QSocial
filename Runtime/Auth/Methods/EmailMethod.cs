@@ -152,10 +152,10 @@ namespace QSocial.Auth.Methods
                                 {
                                     QEventExecutor.ExecuteInUpdate(() =>
                                     {
-                                        AuthManager.FinishProcess();
                                         ex = AuthManager.GetFirebaseException(task.Exception);
+                                        AuthManager.FinishProcess(true , ex);
                                         Logger.LogError("Fail to link account " + ex, this);
-                                        result = ProcessResult.Running;
+                                        result = ProcessResult.None;
                                     });
                                     return;
                                 }
@@ -184,10 +184,10 @@ namespace QSocial.Auth.Methods
                                    {
                                        QEventExecutor.ExecuteInUpdate(() =>
                                        {
-                                           AuthManager.FinishProcess();
-                                           ex = AuthManager.GetFirebaseException(task.Exception);
                                            Logger.LogError("Failed to create user with email " + ex, this);
-                                           result = ProcessResult.Failure;
+                                           ex = AuthManager.GetFirebaseException(task.Exception);
+                                           AuthManager.FinishProcess(true , ex);
+                                           result = ProcessResult.None;
                                        });
                                        return;
                                    }

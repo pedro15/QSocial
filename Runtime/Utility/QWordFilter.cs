@@ -32,7 +32,7 @@ namespace QSocial.Utility
 
         public static bool IsValidString(string s)
         {
-            return !Instance.BadWords.Any((string word) => s.Contains(word));
+            return !string.IsNullOrEmpty(s) && !Instance.BadWords.Any((string word) => s.Contains(word));
         }
 
         private void Awake()
@@ -43,6 +43,7 @@ namespace QSocial.Utility
                 return;
             }
 
+            
             _instance = this;
         }
 
@@ -65,6 +66,7 @@ namespace QSocial.Utility
             for (int i = 0; i < BadWords.Length; i++)
             {
                 BadWords[i] = bwordsnode[i].Value;
+                
             }
         }
     }

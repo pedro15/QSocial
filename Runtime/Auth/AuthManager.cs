@@ -9,6 +9,7 @@ using CommandStateMachine;
 using QSocial.Auth.Modules;
 using QSocial.Auth.Methods;
 using Logger = QSocial.Utility.QSocialLogger;
+using System.Reflection;
 
 namespace QSocial.Auth
 {
@@ -26,7 +27,7 @@ namespace QSocial.Auth
 
         public static event _OnProcessBegin OnProcessBegin;
 
-        public delegate void _OnProcessFinish();
+        public delegate void _OnProcessFinish(bool WantsNotifyUser , System.Exception exception);
 
         public static event _OnProcessFinish OnProcessFinish;
 
@@ -114,6 +115,7 @@ namespace QSocial.Auth
 
             menuModule.OnInit(this);
             profileModule.OnInit(this);
+            databaseCheck.OnInit(this);
 
             emailMethod.Init(this);
             anonymousMethod.Init(this);
@@ -228,10 +230,10 @@ namespace QSocial.Auth
                 OnProcessBegin.Invoke();
         }
 
-        internal static void FinishProcess()
+        internal static void FinishProcess(bool NotifyUser = false , System.Exception exception = null)
         {
             if (OnProcessFinish != null)
-                OnProcessFinish.Invoke();
+                OnProcessFinish.Invoke(NotifyUser , exception);
         }
 
         internal static void CompleteProfile()
@@ -239,12 +241,50 @@ namespace QSocial.Auth
             if (OnProfileCompleted != null) OnProfileCompleted.Invoke();
         }
 
-        public void RequestLogIn(bool GuestRequest = false , bool Checkdb = false)
+        public void RequestLogIn(bool GuestRequest = false)
         {
             if (AuthRunning || ModuleRunning) return;
 
+            ValidateMethods();
             WasRequestedByGuest = GuestRequest;
             fsm.MoveNext(AuthCheckCommand.Next);
+        }
+
+        private void ValidateMethods()
+        {
+            string[] keys = new string[Methodsdb.Keys.Count];
+
+            Methodsdb.Keys.CopyTo(keys, 0);
+
+            for (int i = 0; i < keys.Length; i++)
+            {
+                if (Methodsdb.TryGetValue(keys[i], out AuthMethod method))
+                {
+                    if (!method.Enabled)
+                    {
+                        method.SetEnabled(false);
+                        continue;
+                    }
+
+                    if (auth.CurrentUser != null && auth.CurrentUser.IsAnonymous)
+                    {
+                        var attr = method.GetType().GetCustomAttribute<HasAnonymousConversionAttribute>();
+
+                        if (attr != null)
+                        {
+                            method.SetEnabled(true);
+                        }
+                        else
+                        {
+                            method.SetEnabled(false);
+                        }
+                    }
+                    else
+                    {
+                        method.SetEnabled(true);
+                    }
+                }
+            }
         }
 
         public void RegisterAuthMethod(AuthMethod amethod)

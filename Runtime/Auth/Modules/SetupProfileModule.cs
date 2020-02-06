@@ -121,8 +121,8 @@ namespace QSocial.Auth.Modules
                     else
                     {
                         Logger.LogWarning("Nickname already in the database", this);
+                        AuthManager.FinishProcess(true , new QAuthException(QAuthErrorCode.USERNAME_EXISTS));
                         result = ProcessResult.None;
-                        AuthManager.FinishProcess();
                     }
                 }, (System.Exception ex) =>
                 {
@@ -136,7 +136,7 @@ namespace QSocial.Auth.Modules
             {
                 Logger.LogWarning("Nickname selected is not valid", this);
                 result = ProcessResult.None;
-                AuthManager.FinishProcess();
+                AuthManager.FinishProcess(true ,new QAuthException(QAuthErrorCode.INVALID_USERNAME));
             }
         }
 

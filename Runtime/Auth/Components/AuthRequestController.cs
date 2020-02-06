@@ -25,7 +25,7 @@ namespace QSocial.Auth.Components
 
         private void DoRequest()
         {
-            AuthManager.Instance.RequestLogIn(false, true);
+            AuthManager.Instance.RequestLogIn();
         }
     }
 }
