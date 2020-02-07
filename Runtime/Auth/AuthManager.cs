@@ -86,6 +86,9 @@ namespace QSocial.Auth
         private AnonymousMethod anonymousMethod = default;
 
         public FirebaseAuth auth { get; private set; }
+
+        private static bool ProcessRunning = false;
+
         public bool IsAuthenticated { get { return auth.CurrentUser != null; } }
 
         private bool WasRequestedByGuest = false;
@@ -151,9 +154,6 @@ namespace QSocial.Auth
 
             fsm.OnStateChanged = (AuthCheckState state) =>
            {
-
-               Logger.Log("State changed " + state , this, true);
-
                AuthModule module = null;
 
                DisplayLayout(true);
@@ -226,14 +226,21 @@ namespace QSocial.Auth
 
         internal static void BeginProcess()
         {
-            if (OnProcessBegin != null)
+
+            if (OnProcessBegin != null && !ProcessRunning)
+            {
                 OnProcessBegin.Invoke();
+                ProcessRunning = true;
+            }
         }
 
         internal static void FinishProcess(bool NotifyUser = false , System.Exception exception = null)
         {
             if (OnProcessFinish != null)
+            {
                 OnProcessFinish.Invoke(NotifyUser , exception);
+                ProcessRunning = false;
+            }
         }
 
         internal static void CompleteProfile()
@@ -325,8 +332,6 @@ namespace QSocial.Auth
             ModuleRunning = true;
             int retrys = 0;
 
-            Logger.Log("Module ::: " + module, this, true);
-            
             startrunning:
             module.OnEnter();
 
@@ -360,8 +365,6 @@ namespace QSocial.Auth
 
             if (module.IsValid(WasRequestedByGuest , auth.CurrentUser))
             {
-                Debug.Log("Module valid");
-
                 runmodule:
                 module.Execute(this);
 
@@ -372,8 +375,6 @@ namespace QSocial.Auth
                 {
                     tres = module.GetResult();
 
-                    Debug.Log(module.GetType().Name + " :: " + tres);
-
                     if (Input.GetKey(KeyCode.Escape) && Time.time - time_enter >= 0.15f)
                     {
                         RequestExit();
@@ -383,8 +384,6 @@ namespace QSocial.Auth
                     float diff = Time.time - ExitTime;
                     if (IsAuthenticated && (module.IsInterruptible() && ExitRequest && diff > 0.2f && diff < 0.5f))
                     {
-
-                        Debug.Log("Move next! -- go back");
                         fsm.MoveNext(AuthCheckCommand.GoBack);
                         ModuleRunning = false;
                         yield break;
@@ -412,7 +411,7 @@ namespace QSocial.Auth
 
                 if (tres == ProcessResult.Completed)
                 {
-                    Debug.Log("<color=blue>Module completed!</color>");
+                    Logger.Log("Module completed", this, true);
                     module.OnFinish(this,ExitRequest);
                     fsm.MoveNext(AuthCheckCommand.Next);
                     ExitRequest = false;
@@ -433,7 +432,6 @@ namespace QSocial.Auth
         {
             if (SelectedMethod != null )
             {
-                int retrys = 0;
                 AuthRunning = true;
                 DisplayLayout(true);
                 IAuthCustomUI customUI = SelectedMethod as IAuthCustomUI;
@@ -461,23 +459,15 @@ namespace QSocial.Auth
 
                         break;
                     }
-
-                    Logger.Log("Auth Running: " + tres , this , true);
                     yield return new WaitForEndOfFrame();
                 } while (tres == ProcessResult.None || tres == ProcessResult.Running);
 
                 if (tres == ProcessResult.Failure)
                 {
-                    Logger.LogWarning("Got Error during process of Module " + SelectedMethod.GetException(), this);
-
-                    if (retrys < MaximunErrorRetrys)
-                    {
-                        Logger.LogWarning("Retrying... " + retrys, this);
-                        retrys++;
-                        goto Execution;
-                    }
-
-                }else if (tres == ProcessResult.Completed)
+                    Logger.LogWarning("Got Error during process of Method " + SelectedMethod.GetException(), this);
+                    goto Execution;
+                }
+                else if (tres == ProcessResult.Completed)
                 {
                     SelectedMethod.OnFinish();
 

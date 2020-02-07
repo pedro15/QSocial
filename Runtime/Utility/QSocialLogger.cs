@@ -58,7 +58,7 @@ namespace QSocial.Utility
 
         private static string FormatMessage(object message, object context)
         {
-            return $"[ { context.GetType().Name } ] { message }";
+            return $"[{ context.GetType().Name }] { message }";
         }
     }
 }

@@ -4,7 +4,8 @@
     public enum QAuthErrorCode : int
     {
         INVALID_USERNAME = 1,
-        USERNAME_EXISTS = 2
+        USERNAME_EXISTS = 2,
+        FORM_INCOMPLETE
     }
 
     public class QAuthException : System.Exception
@@ -27,6 +28,9 @@
 
                     case QAuthErrorCode.USERNAME_EXISTS:
                         return "Username already exists";
+
+                    case QAuthErrorCode.FORM_INCOMPLETE:
+                        return "Please fill all fields";
                 }
 
                 return string.Empty;

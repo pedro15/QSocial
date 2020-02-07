@@ -114,8 +114,7 @@ namespace QSocial.Auth.Methods
                         QEventExecutor.ExecuteInUpdate(() =>
                         {
                             ex = AuthManager.GetFirebaseException(task.Exception);
-                            Logger.LogError("Error sending password " + ex, this);
-                            AuthManager.FinishProcess();
+                            AuthManager.FinishProcess(true , ex);
                             result = ProcessResult.Failure;
                         });
                         return;
@@ -126,6 +125,7 @@ namespace QSocial.Auth.Methods
                         Logger.Log("Password sent correctly", this , true);
                         nav = emailNavigation.ForgotPasswordFinish;
                         UpdateLayout();
+                        AuthManager.FinishProcess();
                         result = ProcessResult.Running;
                     });
                 });
@@ -154,16 +154,15 @@ namespace QSocial.Auth.Methods
                                     {
                                         ex = AuthManager.GetFirebaseException(task.Exception);
                                         AuthManager.FinishProcess(true , ex);
-                                        Logger.LogError("Fail to link account " + ex, this);
-                                        result = ProcessResult.None;
+                                        result = ProcessResult.Failure;
                                     });
                                     return;
                                 }
 
                                 QEventExecutor.ExecuteInUpdate(() =>
                                 {
-                                    AuthManager.FinishProcess();
                                     Logger.Log("Link Account completed!" , this , true);
+                                    AuthManager.FinishProcess();
                                     result = ProcessResult.Completed;
                                 });
                             });
@@ -171,6 +170,7 @@ namespace QSocial.Auth.Methods
                         else
                         {
                             Logger.LogWarning("User is not anonymous!", this);
+                            ex = new System.ArgumentException("User is not anonymous!");
                             result = ProcessResult.Failure;
                         }
                     }
@@ -184,10 +184,9 @@ namespace QSocial.Auth.Methods
                                    {
                                        QEventExecutor.ExecuteInUpdate(() =>
                                        {
-                                           Logger.LogError("Failed to create user with email " + ex, this);
                                            ex = AuthManager.GetFirebaseException(task.Exception);
                                            AuthManager.FinishProcess(true , ex);
-                                           result = ProcessResult.None;
+                                           result = ProcessResult.Failure;
                                        });
                                        return;
                                    }
@@ -195,18 +194,19 @@ namespace QSocial.Auth.Methods
                                    QEventExecutor.ExecuteInUpdate(() =>
                                    {
                                        AuthManager.FinishProcess();
-                                       Logger.Log("Create user with email done", this, true);
-                                       uid = task.Result.UserId;
+                                       uid = task.Result.UserId;  
+                                       Logger.Log("Create user with email done. id: " + uid, this, true);
                                        result = ProcessResult.Completed;
                                    });
-                                   
                                });
                     }
                 }
                 else
                 {
-                    Logger.LogWarning("Passwords must match", this);
-                    result = ProcessResult.None;
+                    ex = new System.ArgumentException("Passwords must match");
+                    Logger.LogWarning(ex.Message, this);
+                    AuthManager.FinishProcess(true, ex);
+                    result = ProcessResult.Failure;
                 }
             });
 
@@ -221,8 +221,8 @@ namespace QSocial.Auth.Methods
                      {
                          QEventExecutor.ExecuteInUpdate(() =>
                          {
-                             AuthManager.FinishProcess();
                              ex = AuthManager.GetFirebaseException(task.Exception);
+                             AuthManager.FinishProcess(true , ex);
                              result = ProcessResult.Failure;
                          });
                          return;
@@ -230,6 +230,7 @@ namespace QSocial.Auth.Methods
 
                      QEventExecutor.ExecuteInUpdate(() =>
                      {
+                         Logger.Log("SingIn completed", this, true);
                          AuthManager.FinishProcess();
                          result = ProcessResult.Completed;
                      });
