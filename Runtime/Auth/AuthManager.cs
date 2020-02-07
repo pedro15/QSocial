@@ -134,6 +134,8 @@ namespace QSocial.Auth
             }
         }
 
+        // PRIVATE API /-/-/-/-/-/-/-/-/-/-/-/
+
         private void InitFSM()
         {
             fsm.AddTransition(AuthCheckState.None, AuthCheckCommand.Next, () => AuthCheckState.MainMenu);
@@ -227,39 +229,6 @@ namespace QSocial.Auth
             }
         }
 
-        internal static void BeginProcess()
-        {
-
-            if (OnProcessBegin != null && !ProcessRunning)
-            {
-                OnProcessBegin.Invoke();
-                ProcessRunning = true;
-            }
-        }
-
-        internal static void FinishProcess(bool NotifyUser = false , System.Exception exception = null)
-        {
-            if (OnProcessFinish != null)
-            {
-                OnProcessFinish.Invoke(NotifyUser , exception);
-                ProcessRunning = false;
-            }
-        }
-
-        internal static void CompleteProfile()
-        {
-            if (OnProfileCompleted != null) OnProfileCompleted.Invoke();
-        }
-
-        public void RequestLogIn(bool GuestRequest = false)
-        {
-            if (AuthRunning || ModuleRunning) return;
-
-            ValidateMethods();
-            WasRequestedByGuest = GuestRequest;
-            fsm.MoveNext(AuthCheckCommand.Next);
-        }
-
         private void ValidateMethods()
         {
             string[] keys = new string[Methodsdb.Keys.Count];
@@ -297,6 +266,43 @@ namespace QSocial.Auth
             }
         }
 
+        // INTERNAL API  /-/-/-/-/-/-/-/-/-/-/-/-/-/
+
+        internal static void BeginProcess()
+        {
+
+            if (OnProcessBegin != null && !ProcessRunning)
+            {
+                OnProcessBegin.Invoke();
+                ProcessRunning = true;
+            }
+        }
+
+        internal static void FinishProcess(bool NotifyUser = false, System.Exception exception = null)
+        {
+            if (OnProcessFinish != null)
+            {
+                OnProcessFinish.Invoke(NotifyUser, exception);
+                ProcessRunning = false;
+            }
+        }
+
+        internal static void CompleteProfile()
+        {
+            if (OnProfileCompleted != null) OnProfileCompleted.Invoke();
+        }
+
+        // PUBLIC API /-/-/-/-/-/-/-/-/-/-/-/-/-/
+
+        public void RequestLogIn(bool GuestRequest = false)
+        {
+            if (AuthRunning || ModuleRunning) return;
+
+            ValidateMethods();
+            WasRequestedByGuest = GuestRequest;
+            fsm.MoveNext(AuthCheckCommand.Next);
+        }
+
         public void RegisterAuthMethod(AuthMethod amethod)
         {
             if (!Methodsdb.ContainsKey(amethod.Id))
@@ -330,6 +336,9 @@ namespace QSocial.Auth
             return null;
         }
 
+        // Coroutines /-/-/-/-/-/-/-/-/-/-/-/-/
+
+        // RUN AUTH MODULE
         private IEnumerator I_RunModule(AuthModule module)
         {
 
@@ -430,6 +439,7 @@ namespace QSocial.Auth
             yield return 0;
         }
 
+        // RUN AUTH METHOD ----
         private IEnumerator I_ExecuteMethod()
         {
             if (SelectedMethod != null )
