@@ -150,11 +150,13 @@ namespace QSocial.Auth
 
             fsm.AddTransition(AuthCheckState.SetupProfile, AuthCheckCommand.Next, () => AuthCheckState.None);
 
-            fsm.AddTransition(AuthCheckState.DatabaseCheck, AuthCheckCommand.Exit, () => AuthCheckState.None);
+           // fsm.AddTransition(AuthCheckState.DatabaseCheck, AuthCheckCommand.Exit, () => AuthCheckState.None);
 
             fsm.OnStateChanged = (AuthCheckState state) =>
            {
                AuthModule module = null;
+
+               Logger.Log($"<color=blue>State changed:: { state } </color>", this, true);
 
                DisplayLayout(true);
 
@@ -199,11 +201,12 @@ namespace QSocial.Auth
                    case AuthCheckState.None:
 
                        DisplayLayout(false);
+                       ModuleRunning = false;
 
                        break;
                }
 
-               if (state != AuthCheckState.None && module != null)
+               if (state != AuthCheckState.None && module != null )
                {
                    StartCoroutine(I_RunModule(module));
                }
@@ -329,6 +332,7 @@ namespace QSocial.Auth
 
         private IEnumerator I_RunModule(AuthModule module)
         {
+
             ModuleRunning = true;
             int retrys = 0;
 
@@ -359,13 +363,15 @@ namespace QSocial.Auth
                         goto startrunning;
                     }
                 }
+
+                yield return new WaitUntil(() => ares == ProcessResult.Completed || retrys >= MaximunErrorRetrys );
             }
 
             retrys = 0;
 
-            if (module.IsValid(WasRequestedByGuest , auth.CurrentUser))
+            if (module.IsValid(WasRequestedByGuest, auth.CurrentUser))
             {
-                runmodule:
+            runmodule:
                 module.Execute(this);
 
                 ProcessResult tres = ProcessResult.None;
@@ -385,7 +391,6 @@ namespace QSocial.Auth
                     if (IsAuthenticated && (module.IsInterruptible() && ExitRequest && diff > 0.2f && diff < 0.5f))
                     {
                         fsm.MoveNext(AuthCheckCommand.GoBack);
-                        ModuleRunning = false;
                         yield break;
                     }
 
@@ -399,7 +404,7 @@ namespace QSocial.Auth
 
                 if (tres == ProcessResult.Failure)
                 {
-                    Logger.LogWarning("Got Error during process of Module " + module.GetException(), this);
+                    Logger.LogWarning("Got Error during process of module " + module.GetException(), this);
 
                     if (retrys < MaximunErrorRetrys)
                     {
@@ -407,20 +412,17 @@ namespace QSocial.Auth
                         retrys++;
                         goto runmodule;
                     }
-                }
-
-                if (tres == ProcessResult.Completed)
+                }else if (tres == ProcessResult.Completed)
                 {
-                    Logger.Log("Module completed", this, true);
-                    module.OnFinish(this,ExitRequest);
+                    Logger.Log("Module completed: " + module.GetType().Name, this, true);
+                    module.OnFinish(this, ExitRequest);
                     fsm.MoveNext(AuthCheckCommand.Next);
                     ExitRequest = false;
                 }
-
-            }else
+            }
+            else
             {
                 fsm.MoveNext(AuthCheckCommand.Next);
-                ModuleRunning = false;
                 yield break;
             }
 

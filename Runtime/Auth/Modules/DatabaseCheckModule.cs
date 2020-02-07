@@ -37,7 +37,7 @@ namespace QSocial.Auth.Modules
         {
             string uid = AuthManager.Instance.auth.CurrentUser.UserId;
 
-            Logger.Log("Check Database!",this);
+            Logger.Log("Check user in Database",this);
             result = ProcessResult.Running;
             QDataManager.Instance.UserExists(uid, (bool exists) =>
            {
@@ -51,7 +51,6 @@ namespace QSocial.Auth.Modules
                        result = ProcessResult.Completed;
                    }, (System.Exception ex) =>
                    {
-                       Logger.LogWarning("Got Error during process of upload user on database " + ex, this);
                        _ex = ex;
                        AuthManager.FinishProcess();
                        result = ProcessResult.Failure;
@@ -64,7 +63,6 @@ namespace QSocial.Auth.Modules
                }
            } , (System.Exception ex) =>
            {
-               Logger.LogWarning("Got Error during process of check user on database " + ex, this);
                AuthManager.FinishProcess();
                _ex = ex;
                result = ProcessResult.Failure;

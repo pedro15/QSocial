@@ -28,8 +28,6 @@ namespace QSocial.Auth.Methods
 
             result = ProcessResult.Running;
 
-            Logger.Log("Anonymous SingIn", this, true);
-
             AuthManager.Instance.auth.SignInAnonymouslyAsync().ContinueWith(task =>
            {
                if (task.IsFaulted || task.IsCanceled)
@@ -37,7 +35,6 @@ namespace QSocial.Auth.Methods
                    QEventExecutor.ExecuteInUpdate(() =>
                    {
                        ex = AuthManager.GetFirebaseException(ex);
-                       Logger.LogError("Anonymous SingIn Failure " + ex, this);
                        AuthManager.FinishProcess();
                        result = ProcessResult.Failure;
                    });

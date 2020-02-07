@@ -38,14 +38,15 @@ namespace QSocial.Auth.Modules
 
         public override void OnFinish(AuthManager manager, bool Interrumpted)
         {
+            Debug.Log("OnFinish!");
             FormContainer.SetActive(false);
         }
 
         public override void OnEnter()
         {
             m_ex = null;
-            checkresult = ProcessResult.None;
             result = ProcessResult.None;
+            checkresult = ProcessResult.None;
             CheckConfigured();
         }
 
@@ -93,9 +94,9 @@ namespace QSocial.Auth.Modules
                                 {
                                     QEventExecutor.ExecuteInUpdate(() =>
                                     {
-                                        Logger.LogError("Setup Profile Failure!", this);
-
-                                        result = ProcessResult.None;
+                                        m_ex = AuthManager.GetFirebaseException(m_ex);
+                                        Logger.LogError("Setup Profile Failure! " + m_ex, this);
+                                        result = ProcessResult.Failure;
                                         AuthManager.FinishProcess();
                                     });
                                     return;
@@ -114,7 +115,7 @@ namespace QSocial.Auth.Modules
                         {
                             m_ex = ex;
                             Logger.LogError("An error ocurrer at register nickname " + ex , this);
-                            result = ProcessResult.None;
+                            result = ProcessResult.Failure;
                             AuthManager.FinishProcess();
                         });
                     }
@@ -128,14 +129,14 @@ namespace QSocial.Auth.Modules
                 {
                     m_ex = ex;
                     Logger.LogError("Error at checking nickname" + ex , this);
-                    result = ProcessResult.None;
+                    result = ProcessResult.Failure;
                     AuthManager.FinishProcess();
                 });
             }
             else
             {
                 Logger.LogWarning("Nickname selected is not valid", this);
-                result = ProcessResult.None;
+                result = ProcessResult.Failure;
                 AuthManager.FinishProcess(true ,new QAuthException(QAuthErrorCode.INVALID_USERNAME));
             }
         }
@@ -156,5 +157,6 @@ namespace QSocial.Auth.Modules
         {
             return checkresult;
         }
+
     }
 }
