@@ -67,6 +67,8 @@ namespace QSocial.Auth
 
         [Header("General Settings")]
         [SerializeField]
+        private bool Persistent = false;
+        [SerializeField]
         private GameObject BaseLayout = default;
         [SerializeField]
         private Button ExitBackground = default;
@@ -110,6 +112,11 @@ namespace QSocial.Auth
             {
                 Destroy(_instance);
                 return;
+            }
+
+            if (Persistent)
+            {
+                DontDestroyOnLoad(gameObject);
             }
 
             auth = FirebaseAuth.DefaultInstance;
