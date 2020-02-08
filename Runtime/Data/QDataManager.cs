@@ -184,7 +184,11 @@ namespace QSocial.Data
                    });
                    return;
                }
-               Result.Invoke(task.Result.ChildrenCount == 0);
+
+               QEventExecutor.ExecuteInUpdate(() =>
+               {
+                   Result.Invoke(task.Result.ChildrenCount == 0);
+               });
            });
         }
 

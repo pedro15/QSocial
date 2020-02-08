@@ -344,8 +344,8 @@ namespace QSocial.Auth
 
             ModuleRunning = true;
             int retrys = 0;
+            bool module_retrying = false;
 
-            startrunning:
             module.OnEnter();
 
             IAsyncModule asyncModule = module as IAsyncModule;
@@ -354,24 +354,29 @@ namespace QSocial.Auth
                 ProcessResult ares = ProcessResult.None;
                 do
                 {
+                    if (module_retrying)
+                    {
+                        module.OnEnter();
+                        module_retrying = false;
+                    }
+
                     ares = asyncModule.AsyncResult();
 
-                    yield return new WaitForEndOfFrame();
-
-                } while (ares == ProcessResult.None || ares == ProcessResult.Running);
-
-                if (ares == ProcessResult.Failure)
-                {
-                    Logger.LogWarning("Got Error during process of AsyncModule " + module.GetException(), this);
-
-                    if (retrys < MaximunErrorRetrys)
+                    if (ares == ProcessResult.Failure)
                     {
-                        Logger.LogWarning("Retrying... " + retrys, this);
-                        retrys++;
-                        yield return new WaitForSeconds(0.5f);
-                        goto startrunning;
+                        Logger.LogWarning("Got Error during process of AsyncModule " + module.GetException(), this);
+
+                        if (retrys < MaximunErrorRetrys)
+                        {
+                            yield return new WaitForSeconds(0.5f);
+                            Logger.LogWarning("Retrying... " + retrys, this);
+                            retrys++;
+                            module_retrying = true;
+                        }
                     }
-                }
+
+                    yield return new WaitForEndOfFrame();
+                } while (ares != ProcessResult.Completed);
 
                 yield return new WaitUntil(() => ares == ProcessResult.Completed || retrys >= MaximunErrorRetrys );
             }
@@ -380,15 +385,25 @@ namespace QSocial.Auth
 
             if (module.IsValid(WasRequestedByGuest, auth.CurrentUser))
             {
-            runmodule:
                 module.Execute(this);
 
                 ProcessResult tres = ProcessResult.None;
                 float time_enter = Time.time;
-
+                
                 do
                 {
+                    if (module_retrying)
+                    {
+                        module.OnEnter();
+                        module.Execute(this);
+                        time_enter = Time.time;
+
+                        module_retrying = false;
+                    }
+
                     tres = module.GetResult();
+
+                    Debug.Log("MODULE " + module.GetType().Name + " RESULT: " + tres);
 
                     if (Input.GetKey(KeyCode.Escape) && Time.time - time_enter >= 0.15f)
                     {
@@ -408,20 +423,24 @@ namespace QSocial.Auth
                         ExitTime = 0;
                     }
 
-                    yield return new WaitForEndOfFrame();
-                } while (tres == ProcessResult.None || tres == ProcessResult.Running);
-
-                if (tres == ProcessResult.Failure)
-                {
-                    Logger.LogWarning("Got Error during process of module " + module.GetException(), this);
-
-                    if (retrys < MaximunErrorRetrys)
+                    if (tres == ProcessResult.Failure)
                     {
-                        Logger.LogWarning("Retrying... " + retrys, this);
-                        retrys++;
-                        goto runmodule;
+                        Logger.LogWarning("Got Error during process of module " + module.GetException(), this);
+
+                        if (retrys < MaximunErrorRetrys)
+                        {
+                            yield return new WaitForSeconds(0.5f);
+                            Logger.LogWarning("Retrying... " + retrys, this);
+                            retrys++;
+                            module_retrying = true;
+                        }
                     }
-                }else if (tres == ProcessResult.Completed)
+
+                    yield return new WaitForEndOfFrame();
+                
+                } while (tres != ProcessResult.Completed);
+                
+                if (tres == ProcessResult.Completed)
                 {
                     Logger.Log("Module completed: " + module.GetType().Name, this, true);
                     module.OnFinish(this, ExitRequest);
@@ -444,6 +463,7 @@ namespace QSocial.Auth
         {
             if (SelectedMethod != null )
             {
+                bool Method_Retry = false;
                 AuthRunning = true;
                 DisplayLayout(true);
                 IAuthCustomUI customUI = SelectedMethod as IAuthCustomUI;
@@ -452,12 +472,17 @@ namespace QSocial.Auth
 
                 IAuthCustomNavigation customNavigation = SelectedMethod as IAuthCustomNavigation;
 
-            Execution:
                 SelectedMethod.OnEnter();
 
                 ProcessResult tres = ProcessResult.None;
                 do
                 {
+                    if (Method_Retry)
+                    {
+                        SelectedMethod.OnEnter();
+                        Method_Retry = false;
+                    }
+
                     tres = SelectedMethod.GetResult();
                     bool goback = (customNavigation != null) ? customNavigation.GoBack() : Input.GetKey(KeyCode.Escape);
 
@@ -471,16 +496,23 @@ namespace QSocial.Auth
 
                         break;
                     }
-                    yield return new WaitForEndOfFrame();
-                } while (tres == ProcessResult.None || tres == ProcessResult.Running);
 
-                if (tres == ProcessResult.Failure)
+                    if (tres == ProcessResult.Failure)
+                    {
+                        Logger.LogWarning("Got Error during process of Method " + SelectedMethod.GetException(), this);
+                        yield return new WaitForSeconds(0.5f);
+                        Logger.LogWarning("Retrying..." , this);
+                        Method_Retry = true;
+                    }
+
+                    yield return new WaitForEndOfFrame();
+                } while (tres != ProcessResult.Completed );
+
+                if (tres == ProcessResult.Completed)
                 {
-                    Logger.LogWarning("Got Error during process of Method " + SelectedMethod.GetException(), this);
-                    goto Execution;
-                }
-                else if (tres == ProcessResult.Completed)
-                {
+                    if (customUI != null)
+                        customUI.HideUI();
+
                     SelectedMethod.OnFinish();
 
                     fsm.MoveNext(AuthCheckCommand.Next);
@@ -495,6 +527,5 @@ namespace QSocial.Auth
             Logger.Log("Auth Execution Finished", this , true);
             yield return 0;
         }
-
     }
 }
