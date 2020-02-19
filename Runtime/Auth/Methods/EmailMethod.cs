@@ -5,6 +5,7 @@ using TMPro;
 using Firebase.Auth;
 using QSocial.Utility;
 using Logger = QSocial.Utility.QSocialLogger;
+using UnityEngine.EventSystems;
 
 namespace QSocial.Auth.Methods
 {
@@ -22,6 +23,8 @@ namespace QSocial.Auth.Methods
 
         public override string Id => "Email-SingIn";
 
+        [SerializeField]
+        private Button[] BackButtons = default;
         [Header("SingIn-Form")]
         [SerializeField]
         private GameObject form_SingIn = default;
@@ -61,6 +64,8 @@ namespace QSocial.Auth.Methods
 
         private emailNavigation nav = emailNavigation.LoginForm;
 
+        private bool btn_back = false;
+
         private string uid = default;
         public override string ResultUserId => uid;
 
@@ -75,6 +80,7 @@ namespace QSocial.Auth.Methods
 
         public override void OnEnter()
         {
+            btn_back = false;
             result = ProcessResult.None;
         }
 
@@ -97,6 +103,11 @@ namespace QSocial.Auth.Methods
                 nav = emailNavigation.ForgotPassword;
                 UpdateLayout();
             });
+
+            foreach(Button btn in BackButtons)
+            {
+                btn.onClick.AddListener(() => btn_back = true);
+            }
 
             RecoverPasswordButton.onClick.AddListener(() =>
             {
@@ -248,7 +259,7 @@ namespace QSocial.Auth.Methods
 
         public override void OnUpdate()
         {
-            if (Input.GetKeyDown(KeyCode.Escape))
+            if (Input.GetKeyDown(KeyCode.Escape) || btn_back)
             {
                 if (AuthManager.Instance.IsAuthenticated && AuthManager.Instance.auth.CurrentUser.IsAnonymous)
                 {
@@ -287,8 +298,10 @@ namespace QSocial.Auth.Methods
                     UpdateLayout();
                     BackResult = (nav != emailNavigation.None) ? false : true;
                 }
+
+                btn_back = false;
             }
-            else if (Input.GetKeyUp(KeyCode.Escape))
+            else if (Input.GetKeyUp(KeyCode.Escape) || !btn_back )
             {
                 BackResult = false;
             }

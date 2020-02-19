@@ -13,6 +13,8 @@ namespace QSocial.Data
     {
         private const string UsersNodePath = "users";
 
+        private const string CloudSaveNodePath = "cloudsaves";
+
         private static QDataManager _instance = null; 
 
         public static QDataManager Instance
@@ -224,8 +226,7 @@ namespace QSocial.Data
             if (AuthManager.Instance.IsAuthenticated)
             {
                 string uid = AuthManager.Instance.auth.CurrentUser.UserId;
-                DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(UsersNodePath).Child(uid)
-                    .Child("userdata");
+                DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(CloudSaveNodePath).Child(uid);
 
                 _ref.GetValueAsync().ContinueWith(task =>
                 {
@@ -238,6 +239,7 @@ namespace QSocial.Data
                 });
             }else
             {
+                OnFailure.Invoke(new System.ArgumentException("User is not autenticated"));
                 Debug.LogError("[QDataManager:: GetCurrentUserData] User is not autenticated!");
             }
         }
@@ -248,8 +250,7 @@ namespace QSocial.Data
             if (AuthManager.Instance.IsAuthenticated)
             {
                 string uid = AuthManager.Instance.auth.CurrentUser.UserId;
-                DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(UsersNodePath).Child(uid)
-                    .Child("userdata");
+                DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(CloudSaveNodePath).Child(uid);
 
                 _ref.SetRawJsonValueAsync(RawJSON).ContinueWith(task =>
                 {

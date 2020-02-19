@@ -5,7 +5,6 @@ using Logger = QSocial.Utility.QSocialLogger;
 
 namespace QSocial.Auth.Modules
 {
-    [System.Serializable]
     public class DatabaseCheckModule : AuthModule
     {
         private ProcessResult result = ProcessResult.None;

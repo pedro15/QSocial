@@ -35,6 +35,10 @@ namespace QSocial.Auth
 
         public static event _OnProfileCompleted OnProfileCompleted;
 
+        public delegate void _OnVerifyCompleted();
+
+        public static event _OnVerifyCompleted OnVerifyCompleted;
+
         private static AuthManager _instance = null;
 
         public static AuthManager Instance
@@ -79,7 +83,6 @@ namespace QSocial.Auth
         private MenuModule menuModule = default;
         [SerializeField]
         private SetupProfileModule profileModule = default;
-        [SerializeField]
         private DatabaseCheckModule databaseCheck = default;
         [Header("Built-In Methods")]
         [SerializeField]
@@ -123,9 +126,11 @@ namespace QSocial.Auth
 
             ExitBackground.onClick.AddListener(() => RequestExit());
 
+            databaseCheck = new DatabaseCheckModule();
+            databaseCheck.OnInit(this);
+            
             menuModule.OnInit(this);
             profileModule.OnInit(this);
-            databaseCheck.OnInit(this);
 
             emailMethod.Init(this);
             anonymousMethod.Init(this);
@@ -209,7 +214,15 @@ namespace QSocial.Auth
 
                    case AuthCheckState.None:
 
-                       DisplayLayout(false);
+                       if (BaseLayout.activeInHierarchy)
+                       {
+                           DisplayLayout(false);
+
+                           if (OnVerifyCompleted != null)
+                               OnVerifyCompleted.Invoke();
+
+                       }
+                       
                        ModuleRunning = false;
 
                        break;
@@ -410,7 +423,7 @@ namespace QSocial.Auth
 
                     tres = module.GetResult();
 
-                    Debug.Log("MODULE " + module.GetType().Name + " RESULT: " + tres);
+                    //Debug.Log("MODULE " + module.GetType().Name + " RESULT: " + tres);
 
                     if (Input.GetKey(KeyCode.Escape) && Time.time - time_enter >= 0.15f)
                     {
@@ -522,10 +535,10 @@ namespace QSocial.Auth
 
                     SelectedMethod.OnFinish();
 
-                    fsm.MoveNext(AuthCheckCommand.Next);
-
                     if (OnAuthCompleted != null)
                         OnAuthCompleted.Invoke();
+
+                    fsm.MoveNext(AuthCheckCommand.Next);
                 }
             }
 

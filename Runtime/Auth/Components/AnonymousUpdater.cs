@@ -38,6 +38,5 @@ namespace QSocial.Auth.Components
             btn.gameObject.SetActive(AuthManager.Instance.IsAuthenticated 
                 && AuthManager.Instance.auth.CurrentUser.IsAnonymous);
         }
-
     }
 }
