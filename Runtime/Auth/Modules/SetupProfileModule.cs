@@ -17,6 +17,8 @@ namespace QSocial.Auth.Modules
         private TMP_InputField textUsername = default;
         [SerializeField]
         private Button SetupButton = default;
+        [SerializeField]
+        private int MinimunUsernameLenght = 6;
 
         ProcessResult result = ProcessResult.None;
 
@@ -74,7 +76,15 @@ namespace QSocial.Auth.Modules
         {
             FirebaseUser usr = AuthManager.Instance.auth.CurrentUser;
 
-            string username = textUsername.text;
+            string username = textUsername.text.ToLower();
+
+            if (username.Length < MinimunUsernameLenght)
+            {
+                Logger.LogWarning("Nickname selected is too short", this);
+                result = ProcessResult.None;
+                AuthManager.FinishProcess(true, new QAuthException(QAuthErrorCode.SHORT_USERNAME));
+                return;
+            }
 
             if (QWordFilter.IsValidString(username))
             {
@@ -106,6 +116,7 @@ namespace QSocial.Auth.Modules
                                 {
                                     Logger.Log("Setup Profile Completed!", this , true);
                                     result = ProcessResult.Completed;
+                                    textUsername.text = string.Empty;
                                     AuthManager.FinishProcess();
                                     AuthManager.CompleteProfile();
                                 });
@@ -157,6 +168,5 @@ namespace QSocial.Auth.Modules
         {
             return checkresult;
         }
-
     }
 }

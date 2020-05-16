@@ -15,7 +15,7 @@ namespace QSocial.Data
 
         private const string CloudSaveNodePath = "cloudsaves";
 
-        private static QDataManager _instance = null; 
+        private static QDataManager _instance = null;
 
         public static QDataManager Instance
         {
@@ -150,10 +150,9 @@ namespace QSocial.Data
 
         public void UserExists(string uid, System.Action<bool> Result , System.Action<System.Exception> OnFailure = null)
         {
-
             DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(UsersNodePath);
 
-            _ref.OrderByChild("userid").EqualTo(uid).GetValueAsync().ContinueWith(task =>
+            _ref.Child(uid).GetValueAsync().ContinueWith(task =>
             {
                 if (task.IsFaulted || task.IsCanceled)
                 {
@@ -166,7 +165,10 @@ namespace QSocial.Data
                     return;
                 }
 
-                QEventExecutor.ExecuteInUpdate(() => Result.Invoke(task.Result.ChildrenCount > 0));
+                QEventExecutor.ExecuteInUpdate(() => 
+                {
+                    Result.Invoke(task.Result.Exists);
+                });
             });
         }
 
@@ -175,7 +177,7 @@ namespace QSocial.Data
         {
             DatabaseReference _ref = FirebaseDatabase.DefaultInstance.GetReference(UsersNodePath);
 
-            _ref.OrderByChild("username").EqualTo(nickname).GetValueAsync().ContinueWith( task =>
+            _ref.Child("username").EqualTo(nickname).GetValueAsync().ContinueWith( task =>
            {
                if (task.IsFaulted || task.IsCanceled)
                {
@@ -189,7 +191,7 @@ namespace QSocial.Data
 
                QEventExecutor.ExecuteInUpdate(() =>
                {
-                   Result.Invoke(task.Result.ChildrenCount == 0);
+                   Result.Invoke(!task.Result.Exists);
                });
            });
         }

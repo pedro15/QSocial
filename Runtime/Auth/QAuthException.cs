@@ -1,10 +1,10 @@
 ﻿namespace QSocial.Auth
 {
-    [System.Flags]
-    public enum QAuthErrorCode : int
+    public enum QAuthErrorCode
     {
-        INVALID_USERNAME = 1,
-        USERNAME_EXISTS = 2,
+        INVALID_USERNAME,
+        SHORT_USERNAME,
+        USERNAME_EXISTS,
         FORM_INCOMPLETE
     }
 
@@ -31,6 +31,8 @@
 
                     case QAuthErrorCode.FORM_INCOMPLETE:
                         return "Please fill all fields";
+                    case QAuthErrorCode.SHORT_USERNAME:
+                        return "Username is too short";
                 }
 
                 return string.Empty;
