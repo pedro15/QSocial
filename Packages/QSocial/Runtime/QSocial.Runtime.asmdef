@@ -1,0 +1,17 @@
+{
+    "name": "QSocial.Runtime",
+    "references": [
+        "UniToolkit-Core",
+        "Unity.TextMeshPro",
+        "UDialogs",
+        "Command_FSM"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": []
+}
