@@ -34,3 +34,5 @@ ExportedObj/
 
 # Unity3D Generated File On Crash Reports
 sysinfo.txt
+
+# DEPLOY : git subtree push --prefix=Packages/QSocial --branch upm
