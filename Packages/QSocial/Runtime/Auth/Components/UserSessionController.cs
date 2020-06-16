@@ -1,6 +1,7 @@
 ﻿using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Events;
 
 namespace QSocial.Auth.Components
 {
@@ -11,6 +12,7 @@ namespace QSocial.Auth.Components
         private TextMeshProUGUI DisplayUsername = default;
         [SerializeField]
         private Button SignOutBtn = default;
+        public UnityEvent OnNoInternet = default;
 
         private void Start()
         {
@@ -19,7 +21,16 @@ namespace QSocial.Auth.Components
             
             if (SignOutBtn != null)
             {
-                SignOutBtn.onClick.AddListener(() => AuthManager.Instance.auth.SignOut());
+                SignOutBtn.onClick.AddListener(() =>
+                { 
+                    if (Application.internetReachability != NetworkReachability.NotReachable)
+                    {
+                        AuthManager.Instance.auth.SignOut();
+                    }else
+                    {
+                        OnNoInternet.Invoke();
+                    }
+                });
             }
 
             Refresh();

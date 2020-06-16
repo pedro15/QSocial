@@ -1,10 +1,13 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 
 namespace QSocial.Auth.Components
 {
     [AddComponentMenu("QSocial/Auth Request") , DefaultExecutionOrder(+50)]
     public class AuthRequestController : MonoBehaviour
     {
+        public Func<bool> ForceAuth = null;
+
         private void Start()
         {
             AuthManager.Instance.auth.StateChanged += Auth_StateChanged;
@@ -25,7 +28,7 @@ namespace QSocial.Auth.Components
 
         private void DoRequest()
         {
-            AuthManager.Instance.RequestLogIn();
+            AuthManager.Instance.RequestLogIn(false, ForceAuth != null ? ForceAuth.Invoke() : false);
         }
     }
 }

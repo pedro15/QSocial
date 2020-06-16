@@ -15,6 +15,8 @@ namespace QSocial.Auth
 {
     public class AuthManager : MonoBehaviour
     {
+        private const string AccountSateKey = "AuthManager-NoAuth";
+
         public delegate void _OnAuthCancelled();
 
         public static event _OnAuthCancelled OnAuthCancelled;
@@ -66,7 +68,8 @@ namespace QSocial.Auth
         {
             GoBack = 1,
             Next = 2,
-            Exit = 4
+            Exit = 4,
+            Skip = 8
         }
 
         [Header("General Settings")]
@@ -78,6 +81,8 @@ namespace QSocial.Auth
         private Button ExitBackground = default;
         [SerializeField]
         private int MaximunErrorRetrys = 5;
+        [SerializeField]
+        private bool AlwaysAskForAccount = false;
         [Header("Modules")]
         [SerializeField]
         private MenuModule menuModule = default;
@@ -85,6 +90,8 @@ namespace QSocial.Auth
         private SetupProfileModule profileModule = default;
         private DatabaseCheckModule databaseCheck = default;
         [Header("Built-In Methods")]
+        [SerializeField]
+        private ContinueWithoutLogin continueWithoutLogin = default;
         [SerializeField]
         private EmailMethod emailMethod = default;
         [SerializeField]
@@ -134,9 +141,15 @@ namespace QSocial.Auth
 
             emailMethod.Init(this);
             anonymousMethod.Init(this);
+            continueWithoutLogin.Init(this);
 
             InitFSM();
         }
+
+        /// <summary>
+        ///  The user skipped auth?. If AlwaysCheckForAccount is set to true this will always returns false
+        /// </summary>
+        public bool AuthSkipped => PlayerPrefs.GetInt(AccountSateKey, 0) > 0;
 
         private void Update()
         {
@@ -150,9 +163,27 @@ namespace QSocial.Auth
 
         private void InitFSM()
         {
-            fsm.AddTransition(AuthCheckState.None, AuthCheckCommand.Next, () => AuthCheckState.MainMenu);
+            fsm.AddTransition(AuthCheckState.None, AuthCheckCommand.Next, () =>
+            {
+                return AuthCheckState.MainMenu;
+            });
 
-            fsm.AddTransition(AuthCheckState.MainMenu, AuthCheckCommand.Next, () => AuthCheckState.AuthMethod);
+            fsm.AddTransition(AuthCheckState.MainMenu, AuthCheckCommand.Next, () =>
+            {
+                return AuthCheckState.AuthMethod;
+            });
+
+            fsm.AddTransition(AuthCheckState.MainMenu, AuthCheckCommand.Skip, () => AuthCheckState.None);
+
+            fsm.AddTransition(AuthCheckState.AuthMethod, AuthCheckCommand.Skip, () =>
+            {
+                if (!AlwaysAskForAccount)
+                    PlayerPrefs.SetInt(AccountSateKey, 1);
+                else
+                    PlayerPrefs.SetInt(AccountSateKey, 0);
+
+                return AuthCheckState.None;
+            });
 
             fsm.AddTransition(AuthCheckState.AuthMethod, AuthCheckCommand.Next, () => AuthCheckState.DatabaseCheck);
 
@@ -178,7 +209,15 @@ namespace QSocial.Auth
                {
                    case AuthCheckState.MainMenu:
 
-                       module = menuModule;
+                       if (Application.internetReachability == NetworkReachability.NotReachable)
+                       {
+                           Logger.Log("No Internet, skip login" , this);
+                           fsm.MoveNext(AuthCheckCommand.Skip);
+                       }else
+                       {
+                            module = menuModule;
+                       }
+
 
                        break;
 
@@ -209,6 +248,8 @@ namespace QSocial.Auth
                    case AuthCheckState.SetupProfile:
 
                        module = profileModule;
+
+                       PlayerPrefs.SetInt(AccountSateKey, 0);
 
                        break;
 
@@ -314,9 +355,12 @@ namespace QSocial.Auth
 
         // PUBLIC API /-/-/-/-/-/-/-/-/-/-/-/-/-/
 
-        public void RequestLogIn(bool GuestRequest = false)
+        
+
+        public void RequestLogIn(bool GuestRequest = false , bool forceauth = false)
         {
-            if (AuthRunning || ModuleRunning) return;
+            if (AuthRunning || ModuleRunning || (!forceauth && PlayerPrefs.GetInt(AccountSateKey, 0) > 0 && !IsAuthenticated))
+                return;
 
             ValidateMethods();
             WasRequestedByGuest = GuestRequest;
@@ -361,7 +405,6 @@ namespace QSocial.Auth
         // RUN AUTH MODULE
         private IEnumerator I_RunModule(AuthModule module)
         {
-
             ModuleRunning = true;
             int retrys = 0;
             bool module_retrying = false;
@@ -481,7 +524,7 @@ namespace QSocial.Auth
         // RUN AUTH METHOD ----
         private IEnumerator I_ExecuteMethod()
         {
-            if (SelectedMethod != null )
+            if (SelectedMethod != null)
             {
                 bool Method_Retry = false;
                 AuthRunning = true;
@@ -538,7 +581,9 @@ namespace QSocial.Auth
                     if (OnAuthCompleted != null)
                         OnAuthCompleted.Invoke();
 
-                    fsm.MoveNext(AuthCheckCommand.Next);
+                    AuthCheckCommand cmd = auth.CurrentUser != null ? AuthCheckCommand.Next : AuthCheckCommand.Skip;
+                   
+                    fsm.MoveNext(cmd);
                 }
             }
 
