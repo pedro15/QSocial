@@ -161,6 +161,12 @@ namespace QSocial.Auth.Modules
 
         public override bool IsValid(bool GuestRequest, FirebaseUser user)
         {
+            if (Application.internetReachability == NetworkReachability.NotReachable)
+            {
+                Debug.Log("NEL");
+                return false;
+            }
+
             return !ProfileReady && AuthManager.Instance.IsAuthenticated;
         }
 

@@ -6,11 +6,13 @@ namespace QSocial.Auth.Components
     [RequireComponent(typeof(Button)), DefaultExecutionOrder(25)]
     public class AnonymousUpdater : MonoBehaviour
     {
+        [SerializeField]
+        private bool CreateProfile = false;
         private Button btn = null;
         private void Start()
         {
             btn = GetComponent<Button>();
-            btn.onClick.AddListener(() => AuthManager.Instance.RequestLogIn(true));
+            btn.onClick.AddListener(() => AuthManager.Instance.RequestLogIn(true , !AuthManager.Instance.IsAuthenticated));
             AuthManager.Instance.auth.StateChanged += Auth_StateChanged;
             AuthManager.OnAuthCompleted += AuthManager_OnAuthCompleted;
         }
@@ -35,8 +37,8 @@ namespace QSocial.Auth.Components
 
         private void RefreshAuthState()
         {
-            btn.gameObject.SetActive(AuthManager.Instance.IsAuthenticated 
-                && AuthManager.Instance.auth.CurrentUser.IsAnonymous);
+            btn.gameObject.SetActive((AuthManager.Instance.IsAuthenticated && AuthManager.Instance.auth.CurrentUser.IsAnonymous) ||
+                (CreateProfile && !AuthManager.Instance.IsAuthenticated));
         }
     }
 }

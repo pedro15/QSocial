@@ -1,6 +1,7 @@
 ﻿using Firebase.Auth;
 using QSocial.Data;
 using QSocial.Data.Users;
+using UnityEngine;
 using Logger = QSocial.Utility.QSocialLogger;
 
 namespace QSocial.Auth.Modules
