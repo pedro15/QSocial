@@ -10,9 +10,30 @@ using QSocial.Auth.Modules;
 using QSocial.Auth.Methods;
 using Logger = QSocial.Utility.QSocialLogger;
 using System.Reflection;
+using UnityEditor;
 
 namespace QSocial.Auth
 {
+
+    [System.Flags]
+    public enum AuthCheckState : int
+    {
+        None = 1,
+        MainMenu = 2,
+        AuthMethod = 4,
+        DatabaseCheck = 8,
+        SetupProfile = 16,
+        InternetCheck = 32
+    }
+
+    [System.Flags]
+    public enum AuthCheckCommand : int
+    {
+        GoBack = 1,
+        Next = 2,
+        Exit = 4
+    }
+
     public class AuthManager : MonoBehaviour
     {
         private const string AccountSateKey = "AuthManager-NoAuth";
@@ -53,25 +74,6 @@ namespace QSocial.Auth
             }
         }
 
-        [System.Flags]
-        private enum AuthCheckState : int
-        {
-            None = 1,
-            MainMenu = 2,
-            AuthMethod = 4,
-            DatabaseCheck = 8,
-            SetupProfile = 16
-        }
-
-        [System.Flags]
-        private enum AuthCheckCommand : int
-        {
-            GoBack = 1,
-            Next = 2,
-            Exit = 4,
-            Skip = 8
-        }
-
         [Header("General Settings")]
         [SerializeField]
         private bool Persistent = false;
@@ -89,6 +91,7 @@ namespace QSocial.Auth
         [SerializeField]
         private SetupProfileModule profileModule = default;
         private DatabaseCheckModule databaseCheck = default;
+        private InternetCheckModule internetcheck = default; 
         [Header("Built-In Methods")]
         [SerializeField]
         private ContinueWithoutLogin continueWithoutLogin = default;
@@ -135,6 +138,9 @@ namespace QSocial.Auth
 
             databaseCheck = new DatabaseCheckModule();
             databaseCheck.OnInit(this);
+
+            internetcheck = new InternetCheckModule();
+            internetcheck.OnInit(this);
             
             menuModule.OnInit(this);
             profileModule.OnInit(this);
@@ -165,17 +171,19 @@ namespace QSocial.Auth
         {
             fsm.AddTransition(AuthCheckState.None, AuthCheckCommand.Next, () =>
             {
-                return AuthCheckState.MainMenu;
+                return AuthCheckState.InternetCheck;
             });
+
+            fsm.AddTransition(AuthCheckState.InternetCheck, AuthCheckCommand.Next, () => AuthCheckState.MainMenu);
+
+            fsm.AddTransition(AuthCheckState.InternetCheck, AuthCheckCommand.Exit, () => AuthCheckState.None);
 
             fsm.AddTransition(AuthCheckState.MainMenu, AuthCheckCommand.Next, () =>
             {
                 return AuthCheckState.AuthMethod;
             });
 
-            fsm.AddTransition(AuthCheckState.MainMenu, AuthCheckCommand.Skip, () => AuthCheckState.None);
-
-            fsm.AddTransition(AuthCheckState.AuthMethod, AuthCheckCommand.Skip, () =>
+            fsm.AddTransition(AuthCheckState.AuthMethod, AuthCheckCommand.Exit, () =>
             {
                 if (!AlwaysAskForAccount)
                     PlayerPrefs.SetInt(AccountSateKey, 1);
@@ -195,7 +203,7 @@ namespace QSocial.Auth
 
             fsm.AddTransition(AuthCheckState.SetupProfile, AuthCheckCommand.Next, () => AuthCheckState.None);
 
-           // fsm.AddTransition(AuthCheckState.DatabaseCheck, AuthCheckCommand.Exit, () => AuthCheckState.None);
+            fsm.AddTransition(AuthCheckState.DatabaseCheck, AuthCheckCommand.Exit, () => AuthCheckState.None);
 
             fsm.OnStateChanged = (AuthCheckState state) =>
            {
@@ -207,17 +215,16 @@ namespace QSocial.Auth
 
                 switch(state)
                {
+
+                   case AuthCheckState.InternetCheck:
+
+                       module = internetcheck;
+
+                       break;
+
                    case AuthCheckState.MainMenu:
 
-                       if (Application.internetReachability == NetworkReachability.NotReachable)
-                       {
-                           Logger.Log("No Internet, skip login" , this);
-                           fsm.MoveNext(AuthCheckCommand.Skip);
-                       }else
-                       {
-                            module = menuModule;
-                       }
-
+                       module = menuModule;
 
                        break;
 
@@ -263,7 +270,7 @@ namespace QSocial.Auth
                                OnVerifyCompleted.Invoke();
 
                        }
-                       
+
                        ModuleRunning = false;
 
                        break;
@@ -288,6 +295,17 @@ namespace QSocial.Auth
                 ExitRequest = true;
                 ExitTime = Time.time;
             }
+        }
+
+        internal bool AuthMethodEnabled(string methodName)
+        {
+            AuthMethod amethod = null;
+            if (Methodsdb.TryGetValue(methodName , out amethod))
+            {
+                return amethod.Enabled;
+            }
+
+            return false;
         }
 
         private void ValidateMethods()
@@ -507,7 +525,10 @@ namespace QSocial.Auth
                 {
                     Logger.Log("Module completed: " + module.GetType().Name, this, true);
                     module.OnFinish(this, ExitRequest);
-                    fsm.MoveNext(AuthCheckCommand.Next);
+
+                    ICustomCommand cmd = module as ICustomCommand;
+
+                    fsm.MoveNext( cmd != null ? cmd.GetNextCommand() : AuthCheckCommand.Next);
                     ExitRequest = false;
                 }
             }
@@ -581,7 +602,7 @@ namespace QSocial.Auth
                     if (OnAuthCompleted != null)
                         OnAuthCompleted.Invoke();
 
-                    AuthCheckCommand cmd = auth.CurrentUser != null ? AuthCheckCommand.Next : AuthCheckCommand.Skip;
+                    AuthCheckCommand cmd = auth.CurrentUser != null ? AuthCheckCommand.Next : AuthCheckCommand.Exit;
                    
                     fsm.MoveNext(cmd);
                 }

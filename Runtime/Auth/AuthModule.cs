@@ -15,6 +15,7 @@ namespace QSocial.Auth
         public virtual void OnInit(AuthManager manager) { }
 
         public virtual void OnEnter() { }
+
         public virtual System.Exception GetException() => null;
 
         public virtual bool IsInterruptible() => false;

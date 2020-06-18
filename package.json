@@ -2,7 +2,7 @@
   "name": "com.pedro15.qsocial",
   "displayName": "QSocial",
   "category": "Social",
-  "description": "Firebase and Photon (PUN2) Social Plugin for unity with facebook integration",
+  "description": "Social framework with firebase, Photon PUN 2 with facebook integration",
   "author": {
     "name": "Pedro Duran",
     "url": "https://github.com/pedro15"
@@ -18,7 +18,6 @@
     "url": "https://github.com/pedro15/QSocial"
   },
   "unity": "2018.4",
-  "version": "1.0.7",
-  "type": "library",
-  "hideInEditor": false
+  "version": "1.0.8",
+  "type": "library"
 }
